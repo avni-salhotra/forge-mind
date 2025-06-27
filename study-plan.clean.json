@@ -1,0 +1,600 @@
+{
+  "weeks": {
+    "1": {
+      "theme": "Arrays & Hashing",
+      "problems": [
+        {
+          "name": "Two Sum",
+          "slug": "two-sum",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Valid Anagram",
+          "slug": "valid-anagram",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Top K Frequent Elements",
+          "slug": "top-k-frequent-elements",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Contains Duplicate",
+          "slug": "contains-duplicate",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Intersection of Two Arrays",
+          "slug": "intersection-of-two-arrays",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "2": {
+      "theme": "Arrays & Hashing",
+      "problems": [
+        {
+          "name": "Longest Consecutive Sequence",
+          "slug": "longest-consecutive-sequence",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Group Anagrams",
+          "slug": "group-anagrams",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Group Shifted Strings",
+          "slug": "group-shifted-strings",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Product of Array Except Self",
+          "slug": "product-of-array-except-self",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Valid Sudoku",
+          "slug": "valid-sudoku",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Encode and Decode Strings",
+          "slug": "encode-and-decode-strings",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "3": {
+      "theme": "Two Pointers",
+      "problems": [
+        {
+          "name": "Valid Palindrome",
+          "slug": "valid-palindrome",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Two Sum II (Sorted Input)",
+          "slug": "two-sum-ii-sorted-input",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Is Subsequence",
+          "slug": "is-subsequence",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Container With Most Water",
+          "slug": "container-with-most-water",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "3Sum",
+          "slug": "3sum",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "4": {
+      "theme": "Sliding Window",
+      "problems": [
+        {
+          "name": "Best Time to Buy and Sell Stock",
+          "slug": "best-time-to-buy-and-sell-stock",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Longest Substring Without Repeating Characters",
+          "slug": "longest-substring-without-repeating-characters",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Permutation in String",
+          "slug": "permutation-in-string",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Max Consecutive Ones III",
+          "slug": "max-consecutive-ones-iii",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Find All Anagrams in a String",
+          "slug": "find-all-anagrams-in-a-string",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "5": {
+      "theme": "Sliding Window Hard + Catchup",
+      "problems": [
+        {
+          "name": "Minimum Window Substring",
+          "slug": "minimum-window-substring",
+          "difficulty": "Hard",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Maximum Sliding Window",
+          "slug": "maximum-sliding-window",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Longest Repeating Character Replacement",
+          "slug": "longest-repeating-character-replacement",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "6": {
+      "theme": "Binary Search",
+      "problems": [
+        {
+          "name": "Binary Search",
+          "slug": "binary-search",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Search a 2D Matrix",
+          "slug": "search-a-2d-matrix",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Find Minimum in Rotated Sorted Array",
+          "slug": "find-minimum-in-rotated-sorted-array",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Search in Rotated Sorted Array",
+          "slug": "search-in-rotated-sorted-array",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Koko Eating Bananas",
+          "slug": "koko-eating-bananas",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "7": {
+      "theme": "Tree Core",
+      "problems": [
+        {
+          "name": "Maximum Depth of Binary Tree",
+          "slug": "maximum-depth-of-binary-tree",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Invert Binary Tree",
+          "slug": "invert-binary-tree",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Binary Tree Level Order Traversal",
+          "slug": "binary-tree-level-order-traversal",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Subtree of Another Tree",
+          "slug": "subtree-of-another-tree",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Lowest Common Ancestor of a Binary Tree",
+          "slug": "lowest-common-ancestor-of-a-binary-tree",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "8": {
+      "theme": "Tree Logic Expansion",
+      "problems": [
+        {
+          "name": "Diameter of Binary Tree",
+          "slug": "diameter-of-binary-tree",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Validate Binary Search Tree",
+          "slug": "validate-binary-search-tree",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Recover Binary Search Tree",
+          "slug": "recover-binary-search-tree",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Serialize and Deserialize Binary Tree",
+          "slug": "serialize-and-deserialize-binary-tree",
+          "difficulty": "Hard",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Binary Tree Cameras",
+          "slug": "binary-tree-cameras",
+          "difficulty": "Hard",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "9": {
+      "theme": "Graphs",
+      "problems": [
+        {
+          "name": "Clone Graph",
+          "slug": "clone-graph",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Number of Islands",
+          "slug": "number-of-islands",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Course Schedule",
+          "slug": "course-schedule",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Graph Valid Tree",
+          "slug": "graph-valid-tree",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "10": {
+      "theme": "Graphs",
+      "problems": [
+        {
+          "name": "Word Ladder",
+          "slug": "word-ladder",
+          "difficulty": "Hard",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Pacific Atlantic Water Flow",
+          "slug": "pacific-atlantic-water-flow",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Reconstruct Itinerary",
+          "slug": "reconstruct-itinerary",
+          "difficulty": "Hard",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Evaluate Division",
+          "slug": "evaluate-division",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "11": {
+      "theme": "Heaps & Intervals",
+      "problems": [
+        {
+          "name": "Merge Intervals",
+          "slug": "merge-intervals",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Insert Interval",
+          "slug": "insert-interval",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Meeting Rooms I",
+          "slug": "meeting-rooms-i",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Meeting Rooms II",
+          "slug": "meeting-rooms-ii",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Minimum Interval to Include Each Query",
+          "slug": "minimum-interval-to-include-each-query",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "12": {
+      "theme": "Heaps & Intervals",
+      "problems": [
+        {
+          "name": "Median from Data Stream",
+          "slug": "median-from-data-stream",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Find Median from Data Stream (yes, twice—on purpose)",
+          "slug": "find-median-from-data-stream-yes-twiceon-purpose",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Employee Free Time",
+          "slug": "employee-free-time",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "13": {
+      "theme": "Dynamic Programming",
+      "problems": [
+        {
+          "name": "Climbing Stairs",
+          "slug": "climbing-stairs",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "House Robber",
+          "slug": "house-robber",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "House Robber II",
+          "slug": "house-robber-ii",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Coin Change",
+          "slug": "coin-change",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "14": {
+      "theme": "Dynamic Programming",
+      "problems": [
+        {
+          "name": "Partition Equal Subset Sum",
+          "slug": "partition-equal-subset-sum",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Longest Increasing Subsequence",
+          "slug": "longest-increasing-subsequence",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Decode Ways",
+          "slug": "decode-ways",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Longest Common Subsequence",
+          "slug": "longest-common-subsequence",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "15": {
+      "theme": "Dynamic Programming",
+      "problems": [
+        {
+          "name": "Edit Distance",
+          "slug": "edit-distance",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Longest Palindromic Substring",
+          "slug": "longest-palindromic-substring",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "16": {
+      "theme": "Backtracking",
+      "problems": [
+        {
+          "name": "Subsets",
+          "slug": "subsets",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Permutations",
+          "slug": "permutations",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Word Search",
+          "slug": "word-search",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Letter Combinations of a Phone Number",
+          "slug": "letter-combinations-of-a-phone-number",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "17": {
+      "theme": "Backtracking",
+      "problems": [
+        {
+          "name": "Combination Sum",
+          "slug": "combination-sum",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Palindrome Partitioning",
+          "slug": "palindrome-partitioning",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "Restore IP Addresses",
+          "slug": "restore-ip-addresses",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        },
+        {
+          "name": "N-Queens",
+          "slug": "nqueens",
+          "difficulty": "Unknown",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "leetcode-progress-tracker",
+  "version": "1.0.0",
+  "description": "Personal LeetCode Progress Tracker with Email Notifications",
+  "main": "tracker.js",
+  "scripts": {
+    "start": "node tracker.js",
+    "dev": "nodemon tracker.js",
+    "test": "node test-leetcode-api.js",
+    "test:tracker": "node test-tracker.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.10",
+    "dotenv": "^16.4.1",
+    "date-fns": "^3.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "keywords": [
+    "leetcode",
+    "progress-tracker",
+    "coding-practice",
+    "email-notifications"
+  ],
+  "author": "avnisalhotra",
+  "license": "MIT"
+}
