@@ -8,6 +8,7 @@
  * 2. Sends email notifications based on progress
  * 3. Tracks streaks and overall progress
  * 4. Runs scheduled checks via cron jobs
+ * 5. Supports multiple problems per day with frontend configuration
  */
 
 require('dotenv').config();
@@ -21,12 +22,176 @@ const path = require('path');
 const { STUDY_PLAN, TRACKER_CONFIG, StudyPlanHelper } = require('./study-plan');
 
 const PROGRESS_PATH = path.join(__dirname,'progress.json');
+const SETTINGS_PATH = path.join(__dirname,'settings.json');
 
-function loadProgress(){
-  try{ return JSON.parse(fs.readFileSync(PROGRESS_PATH,'utf-8'));}catch(e){return { lastSentDate:null,lastSlug:null,solved:true };}
+/**
+ * New Data Structure Management
+ */
+
+// Default user settings
+const DEFAULT_SETTINGS = {
+  num_questions: 1,
+  email_enabled: true,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString()
+};
+
+// Default progress structure
+const DEFAULT_PROGRESS = {
+  lastSentDate: null,
+  sentProblems: [],
+  studyPlanPosition: 0,
+  pendingQueue: [],
+  settingsAtSendTime: {
+    num_questions: 1,
+    timestamp: null
+  }
+};
+
+function loadSettings() {
+  try {
+    const data = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
+    return { ...DEFAULT_SETTINGS, ...data };
+  } catch (e) {
+    // Create default settings file if it doesn't exist
+    saveSettings(DEFAULT_SETTINGS);
+    return DEFAULT_SETTINGS;
+  }
 }
 
-function saveProgress(data){ fs.writeFileSync(PROGRESS_PATH,JSON.stringify(data,null,2)); }
+function saveSettings(settings) {
+  const updatedSettings = {
+    ...settings,
+    updated_at: new Date().toISOString()
+  };
+  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(updatedSettings, null, 2));
+  return updatedSettings;
+}
+
+function loadProgress() {
+  try {
+    const data = JSON.parse(fs.readFileSync(PROGRESS_PATH, 'utf-8'));
+    
+    // Check if this is old format and migrate
+    if (data.lastSlug !== undefined) {
+      console.log('🔄 Migrating old progress format...');
+      return migrateOldProgress(data);
+    }
+    
+    return { ...DEFAULT_PROGRESS, ...data };
+  } catch (e) {
+    return DEFAULT_PROGRESS;
+  }
+}
+
+function saveProgress(data) {
+  const progressData = { ...DEFAULT_PROGRESS, ...data };
+  fs.writeFileSync(PROGRESS_PATH, JSON.stringify(progressData, null, 2));
+}
+
+/**
+ * Migration function for old progress.json format
+ */
+function migrateOldProgress(oldData) {
+  console.log('📦 Old format detected:', oldData);
+  
+  const orderedProblems = StudyPlanHelper.getOrderedProblemList();
+  let studyPlanPosition = 0;
+  
+  // Find current position in study plan
+  if (oldData.lastSlug) {
+    const currentIndex = orderedProblems.findIndex(p => p.slug === oldData.lastSlug);
+    studyPlanPosition = currentIndex !== -1 ? currentIndex : 0;
+  }
+  
+  const migratedProgress = {
+    lastSentDate: oldData.lastSentDate,
+    sentProblems: oldData.lastSlug ? [{
+      slug: oldData.lastSlug,
+      solved: oldData.solved || false,
+      sentDate: oldData.lastSentDate
+    }] : [],
+    studyPlanPosition: studyPlanPosition,
+    pendingQueue: [],
+    settingsAtSendTime: {
+      num_questions: 1, // Default for migrated data
+      timestamp: oldData.lastSentDate
+    }
+  };
+  
+  console.log('✅ Migrated to new format:', migratedProgress);
+  saveProgress(migratedProgress);
+  return migratedProgress;
+}
+
+/**
+ * Helper function to validate and sanitize num_questions
+ */
+function validateNumQuestions(num) {
+  const parsed = parseInt(num);
+  if (isNaN(parsed) || parsed < 1) return 1;
+  if (parsed > 10) return 10; // Maximum reasonable daily limit
+  return parsed;
+}
+
+/**
+ * Get problems to send today based on progress and settings
+ */
+function calculateTodaysProblems(progress, settings) {
+  const numQuestions = validateNumQuestions(settings.num_questions);
+  const orderedProblems = StudyPlanHelper.getOrderedProblemList();
+  
+  // Get unfinished problems from yesterday
+  const unfinishedProblems = progress.sentProblems
+    .filter(p => !p.solved)
+    .map(p => p.slug);
+  
+  // Handle pending queue (from previous num_questions decreases)
+  const allPending = [...unfinishedProblems, ...progress.pendingQueue];
+  
+  const result = {
+    problems: [],
+    unfinished: [],
+    newProblems: [],
+    updatedPosition: progress.studyPlanPosition,
+    updatedPendingQueue: []
+  };
+  
+  // If we have pending problems
+  if (allPending.length > 0) {
+    if (allPending.length >= numQuestions) {
+      // More pending than we can send
+      result.problems = allPending.slice(0, numQuestions);
+      result.unfinished = result.problems;
+      result.updatedPendingQueue = allPending.slice(numQuestions);
+    } else {
+      // Some pending + some new
+      result.unfinished = [...allPending];
+      result.problems = [...allPending];
+      
+      // Add new problems to fill quota
+      const newNeeded = numQuestions - allPending.length;
+      for (let i = 0; i < newNeeded && result.updatedPosition < orderedProblems.length; i++) {
+        const nextProblem = orderedProblems[result.updatedPosition];
+        result.problems.push(nextProblem.slug);
+        result.newProblems.push(nextProblem.slug);
+        result.updatedPosition++;
+      }
+      
+      result.updatedPendingQueue = [];
+    }
+  } else {
+    // No pending, all new problems
+    for (let i = 0; i < numQuestions && result.updatedPosition < orderedProblems.length; i++) {
+      const nextProblem = orderedProblems[result.updatedPosition];
+      result.problems.push(nextProblem.slug);
+      result.newProblems.push(nextProblem.slug);
+      result.updatedPosition++;
+    }
+  }
+  
+  return result;
+}
 
 /**
  * LeetCode API Client
@@ -214,7 +379,7 @@ class EmailService {
   }
 
   /**
-   * Send today's question email
+   * Send today's question email (supports multiple problems)
    */
   async sendTodaysQuestionEmail(problem, topicName){
     const subject = `📝 Today's LeetCode – ${problem.name}`;
@@ -225,6 +390,77 @@ class EmailService {
       <p>Good luck! You only need to complete <strong>one</strong> problem today.</p>`;
     const text = `Topic: ${topicName}\nToday's problem: ${problem.name} (${problem.difficulty})\nhttps://leetcode.com/problems/${problem.slug}/`;
     await this.sendEmail(subject,html,text);
+  }
+
+  /**
+   * Send multiple problems email with categorization
+   */
+  async sendMultipleProblemsEmail(problemDetails, categories) {
+    const { unfinished, newProblems, totalCount } = categories;
+    
+    let subject;
+    if (unfinished.length > 0 && newProblems.length > 0) {
+      subject = `📝 Today's LeetCode Mix – ${unfinished.length} reminder + ${newProblems.length} new`;
+    } else if (unfinished.length > 0) {
+      subject = `⏰ Reminder – ${unfinished.length} unfinished problem${unfinished.length > 1 ? 's' : ''}`;
+    } else {
+      subject = `📝 Today's LeetCode – ${totalCount} problem${totalCount > 1 ? 's' : ''}`;
+    }
+
+    let htmlContent = '<h2>🎯 Your LeetCode Problems for Today</h2>';
+    let textContent = 'Your LeetCode Problems for Today\n\n';
+
+    // Unfinished problems section
+    if (unfinished.length > 0) {
+      htmlContent += `
+        <h3>⏰ Unfinished from Yesterday (${unfinished.length})</h3>
+        <p><em>Complete these first to progress:</em></p>
+        <ul>`;
+      
+      textContent += `⏰ Unfinished from Yesterday (${unfinished.length})\nComplete these first to progress:\n\n`;
+      
+      unfinished.forEach(problem => {
+        const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
+        htmlContent += `
+          <li>
+            <strong>${problem.name}</strong> (${problem.difficulty}) - ${topicName}
+            <br/>🔗 <a href="https://leetcode.com/problems/${problem.slug}/">Solve on LeetCode</a>
+          </li>`;
+        textContent += `- ${problem.name} (${problem.difficulty}) - ${topicName}\n  https://leetcode.com/problems/${problem.slug}/\n\n`;
+      });
+      
+      htmlContent += '</ul>';
+    }
+
+    // New problems section
+    if (newProblems.length > 0) {
+      htmlContent += `
+        <h3>🆕 New Problems (${newProblems.length})</h3>
+        <ul>`;
+      
+      textContent += `\n🆕 New Problems (${newProblems.length})\n\n`;
+      
+      newProblems.forEach(problem => {
+        const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
+        htmlContent += `
+          <li>
+            <strong>${problem.name}</strong> (${problem.difficulty}) - ${topicName}
+            <br/>🔗 <a href="https://leetcode.com/problems/${problem.slug}/">Solve on LeetCode</a>
+          </li>`;
+        textContent += `- ${problem.name} (${problem.difficulty}) - ${topicName}\n  https://leetcode.com/problems/${problem.slug}/\n\n`;
+      });
+      
+      htmlContent += '</ul>';
+    }
+
+    htmlContent += `
+      <p>💪 <strong>Goal:</strong> Complete all ${totalCount} problem${totalCount > 1 ? 's' : ''} to unlock tomorrow's challenges!</p>
+      <p>🎯 Remember: You need to solve unfinished problems to progress through the study plan.</p>
+    `;
+
+    textContent += `\nGoal: Complete all ${totalCount} problem${totalCount > 1 ? 's' : ''} to unlock tomorrow's challenges!\nRemember: You need to solve unfinished problems to progress through the study plan.`;
+
+    await this.sendEmail(subject, htmlContent, textContent);
   }
 }
 
@@ -238,43 +474,125 @@ class ProgressTracker {
   }
 
   /**
-   * Main daily check function
+   * Main daily check function - handles multiple problems
    */
   async runDailyRoutine() {
-    console.log('\n🕑 Daily routine');
-    const todayStr=format(new Date(),'yyyy-MM-dd');
-    const yesterdayStr=format(new Date(Date.now()-86400000),'yyyy-MM-dd');
+    console.log('\n🕑 Daily routine - Multi-problem support');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const yesterdayStr = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
+    
     const progress = loadProgress();
+    const settings = loadSettings();
     const username = STUDY_PLAN.username;
 
-    // if we sent a question yesterday and it's not marked solved, check if solved now
-    if(progress.lastSentDate===yesterdayStr && progress.solved===false && progress.lastSlug){
-      const ySubmissions = await this.leetcodeAPI.getUserSubmissions(username,50);
-      const solvedYesterday = ySubmissions.submission.some(s=>{
-        const d = format(startOfDay(new Date(parseInt(s.timestamp)*1000)),'yyyy-MM-dd');
-        return d===yesterdayStr && s.titleSlug===progress.lastSlug;
-      });
-      if(solvedYesterday){ progress.solved=true; saveProgress(progress);} 
+    console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
+    console.log(`📅 Last sent: ${progress.lastSentDate}, Today: ${todayStr}`);
+
+    // Step 1: Check if any problems from yesterday were solved
+    if (progress.lastSentDate === yesterdayStr && progress.sentProblems.length > 0) {
+      console.log('🔍 Checking yesterday\'s submissions...');
+      await this.updateSolvedStatus(progress, yesterdayStr, username);
     }
 
-    // If yesterday unsolved, send reminder and exit
-    if(progress.lastSentDate===yesterdayStr && progress.solved===false){
-      const problemInfo = StudyPlanHelper.getProblemBySlug(progress.lastSlug);
-      const topicName = StudyPlanHelper.getTopicBySlug(progress.lastSlug);
-      await this.emailService.sendReminderEmail(problemInfo, topicName);
-      console.log('📧 Reminder email sent for unsolved problem');
+    // Step 2: Calculate what problems to send today
+    const todaysCalculation = calculateTodaysProblems(progress, settings);
+    
+    if (todaysCalculation.problems.length === 0) {
+      console.log('🎉 Study plan completed! No more problems to send.');
       return;
     }
 
-    // Need to send a new problem for today
-    const next = StudyPlanHelper.getNextSlug(progress.lastSlug);
-    if(!next){ console.error('No problems in study plan'); return; }
-    const topicName = StudyPlanHelper.getTopicBySlug(next.slug);
-    await this.emailService.sendTodaysQuestionEmail(next, topicName);
-    console.log(`📧 Today's question email sent: ${next.name}`);
+    console.log(`📝 Sending ${todaysCalculation.problems.length} problems:`);
+    console.log(`  - Unfinished: ${todaysCalculation.unfinished.length}`);
+    console.log(`  - New: ${todaysCalculation.newProblems.length}`);
 
-    // update progress
-    saveProgress({ lastSentDate: todayStr, lastSlug: next.slug, solved:false });
+    // Step 3: Get problem details for email
+    const problemDetails = this.getProblemDetails(todaysCalculation.problems);
+    const unfinishedDetails = problemDetails.filter(p => todaysCalculation.unfinished.includes(p.slug));
+    const newProblemDetails = problemDetails.filter(p => todaysCalculation.newProblems.includes(p.slug));
+
+    // Step 4: Send appropriate email
+    if (problemDetails.length === 1) {
+      // Single problem - use original email format
+      const problem = problemDetails[0];
+      const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
+      await this.emailService.sendTodaysQuestionEmail(problem, topicName);
+    } else {
+      // Multiple problems - use new email format
+      await this.emailService.sendMultipleProblemsEmail(problemDetails, {
+        unfinished: unfinishedDetails,
+        newProblems: newProblemDetails,
+        totalCount: problemDetails.length
+      });
+    }
+
+    // Step 5: Update progress
+    const newSentProblems = todaysCalculation.problems.map(slug => ({
+      slug: slug,
+      solved: false,
+      sentDate: todayStr
+    }));
+
+    const newProgress = {
+      lastSentDate: todayStr,
+      sentProblems: newSentProblems,
+      studyPlanPosition: todaysCalculation.updatedPosition,
+      pendingQueue: todaysCalculation.updatedPendingQueue,
+      settingsAtSendTime: {
+        num_questions: settings.num_questions,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    saveProgress(newProgress);
+    console.log(`✅ Daily routine completed. Progress saved.`);
+  }
+
+  /**
+   * Update solved status for sent problems
+   */
+  async updateSolvedStatus(progress, checkDate, username) {
+    try {
+      const submissions = await this.leetcodeAPI.getUserSubmissions(username, 100);
+      
+      // Filter submissions from the check date
+      const dateSubmissions = submissions.submission.filter(s => {
+        const submissionDate = format(new Date(parseInt(s.timestamp) * 1000), 'yyyy-MM-dd');
+        return submissionDate === checkDate;
+      });
+
+      console.log(`📊 Found ${dateSubmissions.length} submissions from ${checkDate}`);
+
+      // Update solved status for each sent problem
+      let solvedCount = 0;
+      progress.sentProblems.forEach(sentProblem => {
+        const wasSolved = dateSubmissions.some(sub => sub.titleSlug === sentProblem.slug);
+        if (wasSolved && !sentProblem.solved) {
+          sentProblem.solved = true;
+          solvedCount++;
+          console.log(`✅ Marked ${sentProblem.slug} as solved`);
+        }
+      });
+
+      if (solvedCount > 0) {
+        saveProgress(progress);
+        console.log(`🎉 Updated ${solvedCount} problems as solved!`);
+      }
+
+    } catch (error) {
+      console.error('❌ Error checking submissions:', error.message);
+      console.log('⚠️ Continuing with conservative assumption (unsolved)');
+    }
+  }
+
+  /**
+   * Get problem details for a list of slugs
+   */
+  getProblemDetails(slugs) {
+    return slugs.map(slug => {
+      const problem = StudyPlanHelper.getProblemBySlug(slug);
+      return problem || { slug, name: slug, difficulty: 'Unknown' };
+    }).filter(Boolean);
   }
 
   /**
@@ -302,7 +620,7 @@ class ProgressTracker {
    * Test the tracker manually
    */
   async testTracker() {
-    console.log('🧪 Testing LeetCode Progress Tracker...\n');
+    console.log('🧪 Testing LeetCode Progress Tracker (Multi-problem version)...\n');
     
     try {
       // Test API connection
@@ -317,25 +635,40 @@ class ProgressTracker {
 
       // Test study plan
       console.log('3. Testing study plan...');
-      const currentWeek = StudyPlanHelper.getCurrentWeek();
-      const currentProblems = StudyPlanHelper.getCurrentWeekProblems();
-      console.log(`✅ Current week: ${currentWeek}`);
-      console.log(`✅ Current problems: ${currentProblems.length}\n`);
+      const orderedProblems = StudyPlanHelper.getOrderedProblemList();
+      console.log(`✅ Total problems in study plan: ${orderedProblems.length}`);
+      console.log(`✅ Topics: ${STUDY_PLAN.topics.length}\n`);
+
+      // Test settings and progress
+      console.log('4. Testing settings and progress...');
+      const settings = loadSettings();
+      const progress = loadProgress();
+      console.log(`✅ Settings loaded: ${settings.num_questions} problems per day`);
+      console.log(`✅ Progress loaded: Position ${progress.studyPlanPosition}/${orderedProblems.length}`);
+      console.log(`✅ Sent problems: ${progress.sentProblems.length}, Pending queue: ${progress.pendingQueue.length}\n`);
+
+      // Test problem calculation
+      console.log('5. Testing problem calculation...');
+      const todaysCalculation = calculateTodaysProblems(progress, settings);
+      console.log(`✅ Would send ${todaysCalculation.problems.length} problems today:`);
+      console.log(`   - Unfinished: ${todaysCalculation.unfinished.length}`);
+      console.log(`   - New: ${todaysCalculation.newProblems.length}`);
+      console.log(`   - Updated position: ${todaysCalculation.updatedPosition}\n`);
 
       // Test email (optional)
       if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        console.log('4. Testing email (sending test email)...');
+        console.log('6. Testing email (sending test email)...');
         await this.emailService.sendEmail(
-          '🧪 LeetCode Tracker Test',
-          '<h2>🎉 Test email successful!</h2><p>Your LeetCode tracker is working!</p>',
-          'Test email successful! Your LeetCode tracker is working!'
+          '🧪 LeetCode Tracker Test - Multi-problem Support',
+          '<h2>🎉 Test email successful!</h2><p>Your LeetCode tracker with multi-problem support is working!</p>',
+          'Test email successful! Your LeetCode tracker with multi-problem support is working!'
         );
         console.log('✅ Email test successful!\n');
       } else {
-        console.log('4. ⚠️ Email not configured (set EMAIL_USER and EMAIL_PASS in .env)\n');
+        console.log('6. ⚠️ Email not configured (set EMAIL_USER and EMAIL_PASS in .env)\n');
       }
 
-      console.log('🎉 All tests passed! Tracker is ready to use.\n');
+      console.log('🎉 All tests passed! Multi-problem tracker is ready to use.\n');
       
     } catch (error) {
       console.error('❌ Test failed:', error.message);
@@ -363,6 +696,7 @@ class ProgressTracker {
 async function main() {
   const tracker = new ProgressTracker();
   const command = process.argv[2];
+  const subcommand = process.argv[3];
 
   switch (command) {
     case 'test':
@@ -378,21 +712,128 @@ async function main() {
       tracker.startScheduledJobs();
       console.log('📱 Tracker is running! Press Ctrl+C to stop.');
       break;
+
+    case 'settings':
+      handleSettingsCommand(subcommand);
+      break;
+
+    case 'status':
+      showStatus();
+      break;
     
     default:
       console.log(`
-🎯 LeetCode Progress Tracker
+🎯 LeetCode Progress Tracker - Multi-Problem Support
 
 Usage:
-  node tracker.js test     - Test all components
-  node tracker.js check    - Run daily routine once (same as 2 AM job)
-  node tracker.js start    - Start scheduled monitoring
+  node tracker.js test                    - Test all components
+  node tracker.js check                   - Run daily routine once (same as 2 AM job)
+  node tracker.js start                   - Start scheduled monitoring
+  node tracker.js settings [get|set]      - Manage settings
+  node tracker.js status                  - Show current status
+
+Settings Management:
+  node tracker.js settings get            - Show current settings
+  node tracker.js settings set <num>      - Set number of daily problems (1-10)
+
+Examples:
+  node tracker.js settings set 3          - Send 3 problems per day
+  node tracker.js settings get            - View current settings
 
 Make sure to:
 1. Copy env.example to .env and configure your settings
 2. Set up your email credentials for notifications
+3. Use the settings command to configure daily problem count
       `);
   }
+}
+
+/**
+ * Handle settings command
+ */
+function handleSettingsCommand(subcommand) {
+  const settings = loadSettings();
+
+  switch (subcommand) {
+    case 'get':
+      console.log('\n⚙️ Current Settings:');
+      console.log(`📊 Daily problems: ${settings.num_questions}`);
+      console.log(`📧 Email enabled: ${settings.email_enabled}`);
+      console.log(`📅 Created: ${settings.created_at}`);
+      console.log(`🔄 Last updated: ${settings.updated_at}\n`);
+      break;
+
+    case 'set':
+      const newNum = parseInt(process.argv[4]);
+      if (isNaN(newNum)) {
+        console.log('❌ Please provide a valid number');
+        console.log('Usage: node tracker.js settings set <number>');
+        return;
+      }
+
+      const validatedNum = validateNumQuestions(newNum);
+      const updatedSettings = saveSettings({
+        ...settings,
+        num_questions: validatedNum
+      });
+
+      console.log(`✅ Settings updated!`);
+      console.log(`📊 Daily problems: ${validatedNum}`);
+      
+      if (validatedNum !== newNum) {
+        console.log(`⚠️ Number adjusted to valid range (1-10)`);
+      }
+      
+      console.log('\n💡 Changes will take effect on the next daily routine.\n');
+      break;
+
+    default:
+      console.log('\n⚙️ Settings Commands:');
+      console.log('  node tracker.js settings get      - Show current settings');
+      console.log('  node tracker.js settings set <n>  - Set daily problems (1-10)\n');
+  }
+}
+
+/**
+ * Show current status
+ */
+function showStatus() {
+  const settings = loadSettings();
+  const progress = loadProgress();
+  const orderedProblems = StudyPlanHelper.getOrderedProblemList();
+
+  console.log('\n📊 LeetCode Tracker Status\n');
+  
+  console.log('⚙️ Settings:');
+  console.log(`  Daily problems: ${settings.num_questions}`);
+  console.log(`  Email enabled: ${settings.email_enabled}\n`);
+  
+  console.log('📈 Progress:');
+  console.log(`  Study plan position: ${progress.studyPlanPosition}/${orderedProblems.length}`);
+  console.log(`  Last sent: ${progress.lastSentDate || 'Never'}`);
+  console.log(`  Sent problems: ${progress.sentProblems.length}`);
+  console.log(`  Pending queue: ${progress.pendingQueue.length}\n`);
+
+  if (progress.sentProblems.length > 0) {
+    const solvedCount = progress.sentProblems.filter(p => p.solved).length;
+    const unsolvedCount = progress.sentProblems.length - solvedCount;
+    
+    console.log('📋 Last Sent Problems:');
+    console.log(`  Solved: ${solvedCount}`);
+    console.log(`  Unsolved: ${unsolvedCount}`);
+    
+    if (unsolvedCount > 0) {
+      console.log('\n⏰ Unsolved problems:');
+      progress.sentProblems
+        .filter(p => !p.solved)
+        .forEach(p => {
+          const problem = StudyPlanHelper.getProblemBySlug(p.slug);
+          console.log(`  - ${problem?.name || p.slug} (${p.sentDate})`);
+        });
+    }
+  }
+
+  console.log('\n💡 Next routine will run at 2:00 AM\n');
 }
 
 // Run if called directly
