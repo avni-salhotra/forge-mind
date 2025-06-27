@@ -1,0 +1,39 @@
+name: Daily LeetCode Trigger
+on:
+  schedule:
+    # Runs at 2:00 AM UTC every day (adjust timezone as needed)
+    - cron: "0 2 * * *"
+  workflow_dispatch:  # Allows manual triggering for testing
+
+jobs:
+  trigger-daily-routine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger LeetCode Daily Routine
+        run: |
+          echo "🚀 Triggering daily LeetCode routine..."
+          
+          # Make HTTP request to trigger the daily routine
+          response=$(curl -s -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "https://REPLACE-WITH-YOUR-RENDER-URL.onrender.com/api/daily-routine")
+          
+          http_code="${response: -3}"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Daily routine triggered successfully!"
+          else
+            echo "❌ Failed to trigger daily routine. HTTP code: $http_code"
+            exit 1
+          fi
+      
+      - name: Log Success
+        if: success()
+        run: echo "📧 Daily LeetCode email should be sent shortly!"
+      
+      - name: Log Failure
+        if: failure()
+        run: |
+          echo "❌ Daily routine trigger failed!"
+          echo "Check your Render service status and URL" 
