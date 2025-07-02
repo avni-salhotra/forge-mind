@@ -106,32 +106,17 @@ function getCurrentTopic() {
 }
 
 /**
- * Convert Mermaid diagram to base64 image
+ * Convert Mermaid diagram to image URL using mermaid.ink
  */
-async function renderMermaidDiagram(mermaidCode) {
+function getMermaidImageUrl(mermaidCode) {
     try {
-        // Create a temporary file for the Mermaid code
-        const tempMmdFile = path.join(__dirname, 'temp.mmd');
-        const tempSvgFile = path.join(__dirname, 'temp.svg');
-        
-        // Write Mermaid code to temp file
-        fs.writeFileSync(tempMmdFile, mermaidCode);
-        
-        // Use mmdc to render the diagram
-        execSync(`npx mmdc -i ${tempMmdFile} -o ${tempSvgFile}`);
-        
-        // Read the SVG and convert to base64
-        const svg = fs.readFileSync(tempSvgFile, 'utf8');
-        const base64 = Buffer.from(svg).toString('base64');
-        
-        // Clean up temp files
-        fs.unlinkSync(tempMmdFile);
-        fs.unlinkSync(tempSvgFile);
-        
-        return `data:image/svg+xml;base64,${base64}`;
+        // Remove any quotes and escape special characters
+        const cleanCode = mermaidCode.replace(/['"]/g, '').trim();
+        const encodedDiagram = encodeURIComponent(cleanCode);
+        return `https://mermaid.ink/img/${Buffer.from(cleanCode).toString('base64')}`;
     } catch (error) {
-        console.error('Error rendering Mermaid diagram:', error);
-        return mermaidCode; // Fallback to original code if rendering fails
+        console.error('Error creating Mermaid diagram URL:', error);
+        return null;
     }
 }
 
@@ -147,11 +132,11 @@ async function sendSystemDesignEmail() {
         const topic = getCurrentTopic();
         validateTopic(topic);
 
-        // Render Mermaid diagram to base64 image
-        const diagramImage = await renderMermaidDiagram(topic.diagram);
+        // Convert Mermaid diagram to image URL
+        const diagramUrl = getMermaidImageUrl(topic.diagram);
         const topicWithImage = {
             ...topic,
-            diagram: `<img src="${diagramImage}" alt="System Design Diagram" style="max-width: 100%;">`
+            diagram: diagramUrl ? `<img src="${diagramUrl}" alt="System Design Diagram" style="max-width: 100%;">` : topic.diagram
         };
 
         // Generate email content
