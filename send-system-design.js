@@ -71,16 +71,32 @@ function getCurrentDate() {
  * Get current week's topic based on start date
  */
 function getCurrentTopic() {
-    const startDate = new Date(systemDesignPlan.metadata.startDate);
+    const startDate = new Date(process.env.SYSTEM_DESIGN_START_DATE);
     const today = getCurrentDate();
+    
+    // If we haven't reached the start date yet, return null
+    if (today < startDate) {
+        return null;
+    }
+    
     const diffTime = today.getTime() - startDate.getTime();
-    const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+    // Add a small buffer (12 hours) to avoid edge cases around midnight
+    const diffWeeks = Math.floor((diffTime + (12 * 60 * 60 * 1000)) / (1000 * 60 * 60 * 24 * 7));
+    
+    // Count total topics
+    let totalTopics = 0;
+    Object.values(systemDesignPlan.topics).forEach(tier => {
+        totalTopics += tier.length;
+    });
+    
+    // Get the wrapped week number (1-based)
+    const wrappedWeek = ((diffWeeks % totalTopics) + 1);
     
     // Find the topic for current week
     let currentTopic = null;
     for (const tier of Object.keys(systemDesignPlan.topics)) {
         const topics = systemDesignPlan.topics[tier];
-        currentTopic = topics.find(t => t.week === diffWeeks + 1);
+        currentTopic = topics.find(t => t.week === wrappedWeek);
         if (currentTopic) break;
     }
     
