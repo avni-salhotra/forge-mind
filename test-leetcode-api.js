@@ -12,13 +12,15 @@ const axios = require('axios');
  */
 
 // Switch between hosted, local, and production API
-const USE_LOCAL_API = false; // Set to true for local development
-const USE_PRODUCTION_API = true; // Set to true to test your deployed API
+const USE_LOCAL_API = process.env.USE_LOCAL_API === 'true';
 const BASE_URL = USE_LOCAL_API 
-  ? 'http://localhost:3000' 
-  : USE_PRODUCTION_API 
-    ? 'https://alfa-leetcode-api-2-0-1-vj10.onrender.com' // Your actual Render URL
-    : 'https://alfa-leetcode-api.onrender.com'; // Original working API
+  ? 'http://localhost:3000'
+  : process.env.LEETCODE_API_URL;
+
+if (!BASE_URL) {
+  console.error('Error: LEETCODE_API_URL environment variable must be set when not using local API');
+  process.exit(1);
+}
 
 // Test configuration
 const TEST_CONFIG = {
@@ -278,9 +280,7 @@ async function runAllTests() {
   console.log(`🎯 Testing against: ${BASE_URL}`);
   const apiStatus = USE_LOCAL_API 
     ? 'Local (localhost:3000)' 
-    : USE_PRODUCTION_API 
-      ? 'Production (your-api.onrender.com)'
-      : 'Original hosted (alfa-leetcode-api.onrender.com)';
+    : 'Production';
   console.log(`🏠 API Environment: ${apiStatus}`);
   console.log(`👤 Test username: ${TEST_CONFIG.testUsername}`);
   console.log(`📝 Test problem: ${TEST_CONFIG.testProblemSlug}`);
@@ -309,4 +309,4 @@ module.exports = {
   runAllTests,
   testResults,
   TEST_CONFIG
-}; 
+};

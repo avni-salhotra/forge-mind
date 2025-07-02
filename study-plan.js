@@ -63,7 +63,9 @@ const TRACKER_CONFIG = {
   
   // API settings
   api: {
-    baseUrl: process.env.LEETCODE_API_URL || 'https://alfa-leetcode-api.onrender.com',
+    baseUrl: process.env.LEETCODE_API_URL || (() => {
+      throw new Error('LEETCODE_API_URL environment variable must be set');
+    })(),
     timeout: 10000
   }
 };

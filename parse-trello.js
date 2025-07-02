@@ -20,7 +20,11 @@ if (process.argv.length < 3) {
 }
 
 const EXPORT_PATH = process.argv[2];
-const API_BASE = process.env.LEETCODE_API_URL || 'https://alfa-leetcode-api.onrender.com';
+if (!process.env.LEETCODE_API_URL) {
+  console.error('Error: LEETCODE_API_URL environment variable must be set');
+  process.exit(1);
+}
+const API_BASE = process.env.LEETCODE_API_URL;
 const RAW = JSON.parse(fs.readFileSync(EXPORT_PATH, 'utf-8'));
 
 const listsById = new Map();
