@@ -17,60 +17,8 @@ const cors = require('cors');
 const { ProgressTracker, LeetCodeAPI, EmailService } = require('./tracker');
 const { StudyPlanHelper } = require('./study-plan');
 
-// Import helper functions from tracker.js
-// We need to extract these into a separate module or re-implement here
-const fs = require('fs');
-
-const PROGRESS_PATH = path.join(__dirname, 'progress.json');
-const SETTINGS_PATH = path.join(__dirname, 'settings.json');
-
-// Default structures (copied from tracker.js)
-const DEFAULT_SETTINGS = {
-  num_questions: 1,
-  email_enabled: true,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString()
-};
-
-const DEFAULT_PROGRESS = {
-  lastSentDate: null,
-  sentProblems: [],
-  studyPlanPosition: 0,
-  pendingQueue: [],
-  settingsAtSendTime: {
-    num_questions: 1,
-    timestamp: null
-  }
-};
-
-// Helper functions
-function loadSettings() {
-  try {
-    const data = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
-    return { ...DEFAULT_SETTINGS, ...data };
-  } catch (e) {
-    saveSettings(DEFAULT_SETTINGS);
-    return DEFAULT_SETTINGS;
-  }
-}
-
-function saveSettings(settings) {
-  const updatedSettings = {
-    ...settings,
-    updated_at: new Date().toISOString()
-  };
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(updatedSettings, null, 2));
-  return updatedSettings;
-}
-
-function loadProgress() {
-  try {
-    const data = JSON.parse(fs.readFileSync(PROGRESS_PATH, 'utf-8'));
-    return { ...DEFAULT_PROGRESS, ...data };
-  } catch (e) {
-    return DEFAULT_PROGRESS;
-  }
-}
+// Import Firebase database service
+const { loadSettings, saveSettings, loadProgress, DEFAULT_SETTINGS, DEFAULT_PROGRESS } = require('./lib/firebase');
 
 function validateNumQuestions(num) {
   const parsed = parseInt(num);
@@ -94,9 +42,9 @@ const tracker = new ProgressTracker();
 // API Routes
 
 // Get current settings
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => {
   try {
-    const settings = loadSettings();
+    const settings = await loadSettings();
     res.json(settings);
   } catch (error) {
     console.error('Error loading settings:', error);
@@ -105,7 +53,7 @@ app.get('/api/settings', (req, res) => {
 });
 
 // Update settings
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', async (req, res) => {
   try {
     const { num_questions } = req.body;
     
@@ -114,9 +62,9 @@ app.post('/api/settings', (req, res) => {
     }
     
     const validatedNum = validateNumQuestions(num_questions);
-    const currentSettings = loadSettings();
+    const currentSettings = await loadSettings();
     
-    const updatedSettings = saveSettings({
+    const updatedSettings = await saveSettings({
       ...currentSettings,
       num_questions: validatedNum
     });
@@ -136,9 +84,9 @@ app.post('/api/settings', (req, res) => {
 });
 
 // Get current progress
-app.get('/api/progress', (req, res) => {
+app.get('/api/progress', async (req, res) => {
   try {
-    const progress = loadProgress();
+    const progress = await loadProgress();
     res.json(progress);
   } catch (error) {
     console.error('Error loading progress:', error);
@@ -147,10 +95,10 @@ app.get('/api/progress', (req, res) => {
 });
 
 // Get comprehensive status
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
   try {
-    const settings = loadSettings();
-    const progress = loadProgress();
+    const settings = await loadSettings();
+    const progress = await loadProgress();
     const orderedProblems = StudyPlanHelper.getOrderedProblemList();
     
     // Get problem details for sent problems
@@ -278,6 +226,76 @@ app.post('/api/check', async (req, res) => {
   }
 });
 
+// Daily routine endpoint (for GitHub Actions trigger)
+app.post('/api/daily-routine', async (req, res) => {
+  try {
+    console.log('🤖 Daily routine triggered by GitHub Actions...');
+    
+    const startTime = Date.now();
+    
+    // Capture console output
+    const originalLog = console.log;
+    const originalError = console.error;
+    let output = [];
+    
+    console.log = (...args) => {
+      const message = args.join(' ');
+      output.push(message);
+      originalLog(...args);
+    };
+    
+    console.error = (...args) => {
+      const message = `ERROR: ${args.join(' ')}`;
+      output.push(message);
+      originalError(...args);
+    };
+    
+    try {
+      await tracker.runDailyRoutine();
+      
+      // Restore console
+      console.log = originalLog;
+      console.error = originalError;
+      
+      const duration = Date.now() - startTime;
+      
+      res.json({
+        success: true,
+        message: 'Daily routine completed successfully',
+        timestamp: new Date().toISOString(),
+        duration: `${duration}ms`,
+        triggered_by: 'github_actions',
+        output: output.slice(-15) // Last 15 lines for debugging
+      });
+      
+    } catch (routineError) {
+      // Restore console
+      console.log = originalLog;
+      console.error = originalError;
+      
+      const duration = Date.now() - startTime;
+      
+      res.status(500).json({
+        success: false,
+        message: routineError.message,
+        timestamp: new Date().toISOString(),
+        duration: `${duration}ms`,
+        triggered_by: 'github_actions',
+        output: output.slice(-15)
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error running daily routine:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to run daily routine',
+      timestamp: new Date().toISOString(),
+      triggered_by: 'github_actions'
+    });
+  }
+});
+
 // Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
@@ -294,28 +312,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Keep alive endpoint for Render.com
-app.get('/ping', (req, res) => {
-  res.status(200).send('pong');
-});
-
 // Auto-start cron jobs in production
 if (process.env.NODE_ENV === 'production') {
   console.log('🔄 Starting background cron jobs for production...');
   const tracker = new ProgressTracker();
   tracker.startScheduledJobs();
-  
-  // Keep service alive by pinging itself every 14 minutes
-  if (process.env.RENDER_EXTERNAL_URL) {
-    setInterval(async () => {
-      try {
-        const response = await fetch(`${process.env.RENDER_EXTERNAL_URL}/ping`);
-        console.log('🏓 Keep-alive ping:', response.status);
-      } catch (error) {
-        console.log('🏓 Keep-alive ping failed:', error.message);
-      }
-    }, 14 * 60 * 1000); // 14 minutes
-  }
 }
 
 // Error handling middleware

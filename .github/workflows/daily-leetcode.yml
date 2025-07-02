@@ -1,8 +1,8 @@
 name: Daily LeetCode Trigger
 on:
   schedule:
-    # Runs at 2:00 AM UTC every day (adjust timezone as needed)
-    - cron: "0 2 * * *"
+    # Runs at 2:00 AM PST (10:00 AM UTC) every day
+    - cron: "0 10 * * *"
   workflow_dispatch:  # Allows manual triggering for testing
 
 jobs:
@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger LeetCode Daily Routine
+        env:
+          RENDER_URL: ${{ secrets.RENDER_URL }}
         run: |
           echo "🚀 Triggering daily LeetCode routine..."
           
@@ -17,7 +19,7 @@ jobs:
           response=$(curl -s -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
-            "https://REPLACE-WITH-YOUR-RENDER-URL.onrender.com/api/daily-routine")
+            "${RENDER_URL}/api/daily-routine")
           
           http_code="${response: -3}"
           

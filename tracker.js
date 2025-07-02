@@ -16,13 +16,11 @@ const axios = require('axios');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const { format, startOfDay, isToday, parseISO } = require('date-fns');
-const fs = require('fs');
-const path = require('path');
 
 const { STUDY_PLAN, TRACKER_CONFIG, StudyPlanHelper } = require('./study-plan');
 
-const PROGRESS_PATH = path.join(__dirname,'progress.json');
-const SETTINGS_PATH = path.join(__dirname,'settings.json');
+// Import Firebase database service
+const { loadSettings, saveSettings, loadProgress, saveProgress } = require('./lib/firebase');
 
 /**
  * New Data Structure Management
@@ -48,46 +46,8 @@ const DEFAULT_PROGRESS = {
   }
 };
 
-function loadSettings() {
-  try {
-    const data = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
-    return { ...DEFAULT_SETTINGS, ...data };
-  } catch (e) {
-    // Create default settings file if it doesn't exist
-    saveSettings(DEFAULT_SETTINGS);
-    return DEFAULT_SETTINGS;
-  }
-}
-
-function saveSettings(settings) {
-  const updatedSettings = {
-    ...settings,
-    updated_at: new Date().toISOString()
-  };
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(updatedSettings, null, 2));
-  return updatedSettings;
-}
-
-function loadProgress() {
-  try {
-    const data = JSON.parse(fs.readFileSync(PROGRESS_PATH, 'utf-8'));
-    
-    // Check if this is old format and migrate
-    if (data.lastSlug !== undefined) {
-      console.log('🔄 Migrating old progress format...');
-      return migrateOldProgress(data);
-    }
-    
-    return { ...DEFAULT_PROGRESS, ...data };
-  } catch (e) {
-    return DEFAULT_PROGRESS;
-  }
-}
-
-function saveProgress(data) {
-  const progressData = { ...DEFAULT_PROGRESS, ...data };
-  fs.writeFileSync(PROGRESS_PATH, JSON.stringify(progressData, null, 2));
-}
+// Database functions are now imported from Firebase service
+// loadSettings, saveSettings, loadProgress, saveProgress are available globally
 
 /**
  * Migration function for old progress.json format
@@ -481,8 +441,8 @@ class ProgressTracker {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const yesterdayStr = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
     
-    const progress = loadProgress();
-    const settings = loadSettings();
+    const progress = await loadProgress();
+    const settings = await loadSettings();
     const username = STUDY_PLAN.username;
 
     console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
@@ -544,7 +504,7 @@ class ProgressTracker {
       }
     };
 
-    saveProgress(newProgress);
+    await saveProgress(newProgress);
     console.log(`✅ Daily routine completed. Progress saved.`);
   }
 
@@ -575,7 +535,7 @@ class ProgressTracker {
       });
 
       if (solvedCount > 0) {
-        saveProgress(progress);
+        await saveProgress(progress);
         console.log(`🎉 Updated ${solvedCount} problems as solved!`);
       }
 
@@ -641,8 +601,8 @@ class ProgressTracker {
 
       // Test settings and progress
       console.log('4. Testing settings and progress...');
-      const settings = loadSettings();
-      const progress = loadProgress();
+      const settings = await loadSettings();
+      const progress = await loadProgress();
       console.log(`✅ Settings loaded: ${settings.num_questions} problems per day`);
       console.log(`✅ Progress loaded: Position ${progress.studyPlanPosition}/${orderedProblems.length}`);
       console.log(`✅ Sent problems: ${progress.sentProblems.length}, Pending queue: ${progress.pendingQueue.length}\n`);
@@ -714,11 +674,11 @@ async function main() {
       break;
 
     case 'settings':
-      handleSettingsCommand(subcommand);
+      await handleSettingsCommand(subcommand);
       break;
 
     case 'status':
-      showStatus();
+      await showStatus();
       break;
     
     default:
@@ -751,8 +711,8 @@ Make sure to:
 /**
  * Handle settings command
  */
-function handleSettingsCommand(subcommand) {
-  const settings = loadSettings();
+async function handleSettingsCommand(subcommand) {
+  const settings = await loadSettings();
 
   switch (subcommand) {
     case 'get':
@@ -772,7 +732,7 @@ function handleSettingsCommand(subcommand) {
       }
 
       const validatedNum = validateNumQuestions(newNum);
-      const updatedSettings = saveSettings({
+      const updatedSettings = await saveSettings({
         ...settings,
         num_questions: validatedNum
       });
@@ -797,9 +757,9 @@ function handleSettingsCommand(subcommand) {
 /**
  * Show current status
  */
-function showStatus() {
-  const settings = loadSettings();
-  const progress = loadProgress();
+async function showStatus() {
+  const settings = await loadSettings();
+  const progress = await loadProgress();
   const orderedProblems = StudyPlanHelper.getOrderedProblemList();
 
   console.log('\n📊 LeetCode Tracker Status\n');

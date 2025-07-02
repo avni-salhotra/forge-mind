@@ -43,4 +43,4 @@ tmp/
 
 # Build outputs (if we add any)
 dist/
-build/ 
+build/ .env
