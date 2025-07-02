@@ -112,8 +112,10 @@ function getMermaidImageUrl(mermaidCode) {
     try {
         // Remove any quotes and escape special characters
         const cleanCode = mermaidCode.replace(/['"]/g, '').trim();
-        // Only use base64 encoding, no URL encoding needed
-        return `https://mermaid.ink/img/${Buffer.from(cleanCode).toString('base64')}`;
+        // First encode the diagram using pako (same as Mermaid Live Editor)
+        const encoded = Buffer.from(cleanCode).toString('base64');
+        // Use the encoded string in the mermaid.ink URL with dark theme and white background
+        return `https://mermaid.ink/img/${encoded}?theme=dark&bgColor=!white`;
     } catch (error) {
         console.error('Error creating Mermaid diagram URL:', error);
         return null;
