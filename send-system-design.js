@@ -1,6 +1,8 @@
 const fs = require('fs');
 const handlebars = require('handlebars');
 const nodemailer = require('nodemailer');
+const { execSync } = require('child_process');
+const path = require('path');
 require('dotenv').config();
 
 // Load system design curriculum
@@ -104,6 +106,36 @@ function getCurrentTopic() {
 }
 
 /**
+ * Convert Mermaid diagram to base64 image
+ */
+async function renderMermaidDiagram(mermaidCode) {
+    try {
+        // Create a temporary file for the Mermaid code
+        const tempMmdFile = path.join(__dirname, 'temp.mmd');
+        const tempSvgFile = path.join(__dirname, 'temp.svg');
+        
+        // Write Mermaid code to temp file
+        fs.writeFileSync(tempMmdFile, mermaidCode);
+        
+        // Use mmdc to render the diagram
+        execSync(`npx mmdc -i ${tempMmdFile} -o ${tempSvgFile}`);
+        
+        // Read the SVG and convert to base64
+        const svg = fs.readFileSync(tempSvgFile, 'utf8');
+        const base64 = Buffer.from(svg).toString('base64');
+        
+        // Clean up temp files
+        fs.unlinkSync(tempMmdFile);
+        fs.unlinkSync(tempSvgFile);
+        
+        return `data:image/svg+xml;base64,${base64}`;
+    } catch (error) {
+        console.error('Error rendering Mermaid diagram:', error);
+        return mermaidCode; // Fallback to original code if rendering fails
+    }
+}
+
+/**
  * Send system design email
  */
 async function sendSystemDesignEmail() {
@@ -115,8 +147,15 @@ async function sendSystemDesignEmail() {
         const topic = getCurrentTopic();
         validateTopic(topic);
 
+        // Render Mermaid diagram to base64 image
+        const diagramImage = await renderMermaidDiagram(topic.diagram);
+        const topicWithImage = {
+            ...topic,
+            diagram: `<img src="${diagramImage}" alt="System Design Diagram" style="max-width: 100%;">`
+        };
+
         // Generate email content
-        const htmlContent = template({ topic });
+        const htmlContent = template({ topic: topicWithImage });
 
         // Send email
         const mailOptions = {

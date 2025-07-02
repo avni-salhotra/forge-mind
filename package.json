@@ -17,6 +17,7 @@
     "system-design": "node send-system-design.js"
   },
   "dependencies": {
+    "@mermaid-js/mermaid-cli": "^11.6.0",
     "axios": "^1.6.7",
     "cors": "^2.8.5",
     "date-fns": "^3.3.1",
