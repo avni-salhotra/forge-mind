@@ -49,6 +49,16 @@
             padding-left: 15px;
             margin: 10px 0;
         }
+        .diagram {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .diagram img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
@@ -59,7 +69,9 @@
 
     <div class="section">
         <h2>🎯 System Overview</h2>
-        {{topic.diagram}}
+        <div class="diagram">
+            {{{topic.diagram}}}
+        </div>
     </div>
 
     <div class="section">
