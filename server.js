@@ -302,10 +302,12 @@ app.post('/api/daily-routine', async (req, res) => {
 // System Design Routes (kept separate from LeetCode routes)
 app.post('/api/system-design/send', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization || '';
+    const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
     
-    // Basic security check (you should set this in your .env)
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    // More robust security check
+    if (!authHeader || authHeader.toLowerCase() !== expectedAuth.toLowerCase()) {
+      console.log('❌ Unauthorized attempt to send system design email');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
