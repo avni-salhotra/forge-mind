@@ -203,7 +203,7 @@ async function testSystemDesignEmail(options = {}) {
         const topic = getCurrentTopic();
         validateTopic(topic);
 
-        // Generate email content
+        // Generate email content (but don't include in output)
         const htmlContent = template({ topic });
 
         console.log('✅ Environment validation passed');
@@ -214,7 +214,7 @@ async function testSystemDesignEmail(options = {}) {
         console.log(`Name: ${topic.name}`);
         console.log(`Description: ${topic.description}`);
         console.log(`Week: ${topic.week}`);
-        console.log(`Video Resources Available: ${Object.entries(topic.videoResources)
+        console.log(`Video Resources: ${Object.entries(topic.videoResources)
             .filter(([_, v]) => v.available)
             .map(([k]) => k)
             .join(', ')}`);
@@ -223,7 +223,14 @@ async function testSystemDesignEmail(options = {}) {
             success: true,
             topic: topic.name,
             week: topic.week,
-            emailContent: htmlContent
+            resources: {
+                neetcode: topic.videoResources.neetcode.available,
+                designGurus: topic.videoResources.designGurus.available
+            },
+            keyConcepts: topic.keyConcepts.length,
+            freeResources: topic.freeResources.length,
+            realWorldExamples: topic.realWorldExamples.length,
+            diagramUrl: getMermaidImageUrl(topic.diagram)
         };
 
     } catch (error) {
@@ -247,7 +254,7 @@ if (require.main === module) {
         const testDate = dateArg ? dateArg.split('=')[1] : null;
         
         testSystemDesignEmail({ testDate })
-            .then(result => console.log('\nTest result:', result))
+            .then(result => console.log('\nTest result:', JSON.stringify(result, null, 2)))
             .catch(console.error);
     } else {
         sendSystemDesignEmail()
