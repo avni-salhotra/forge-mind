@@ -88,6 +88,65 @@
       ]
     },
     "3": {
+      "theme": "String Manipulation",
+      "problems": [
+        {
+          "name": "Implement strStr()",
+          "slug": "implement-strstr",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Longest Common Prefix",
+          "slug": "longest-common-prefix",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Valid Parentheses",
+          "slug": "valid-parentheses",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Generate Parentheses",
+          "slug": "generate-parentheses",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        }
+      ]
+    },
+    "4": {
+      "theme": "String Manipulation Advanced",
+      "problems": [
+        {
+          "name": "Minimum Window Substring",
+          "slug": "minimum-window-substring",
+          "difficulty": "Hard",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Text Justification",
+          "slug": "text-justification",
+          "difficulty": "Hard",
+          "estimatedTime": 45,
+          "priority": "medium"
+        },
+        {
+          "name": "Regular Expression Matching",
+          "slug": "regular-expression-matching",
+          "difficulty": "Hard",
+          "estimatedTime": 60,
+          "priority": "medium"
+        }
+      ]
+    },
+    "5": {
       "theme": "Two Pointers",
       "problems": [
         {
@@ -127,7 +186,7 @@
         }
       ]
     },
-    "4": {
+    "6": {
       "theme": "Sliding Window",
       "problems": [
         {
@@ -167,7 +226,7 @@
         }
       ]
     },
-    "5": {
+    "7": {
       "theme": "Sliding Window Hard + Catchup",
       "problems": [
         {
@@ -193,7 +252,7 @@
         }
       ]
     },
-    "6": {
+    "8": {
       "theme": "Binary Search",
       "problems": [
         {
@@ -233,7 +292,73 @@
         }
       ]
     },
-    "7": {
+    "9": {
+      "theme": "Bit Manipulation",
+      "problems": [
+        {
+          "name": "Single Number",
+          "slug": "single-number",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Number of 1 Bits",
+          "slug": "number-of-1-bits",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Counting Bits",
+          "slug": "counting-bits",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Reverse Bits",
+          "slug": "reverse-bits",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "10": {
+      "theme": "Data Structure Design",
+      "problems": [
+        {
+          "name": "LRU Cache",
+          "slug": "lru-cache",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Min Stack",
+          "slug": "min-stack",
+          "difficulty": "Easy",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Design HashMap",
+          "slug": "design-hashmap",
+          "difficulty": "Easy",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Design Twitter",
+          "slug": "design-twitter",
+          "difficulty": "Medium",
+          "estimatedTime": 60,
+          "priority": "medium"
+        }
+      ]
+    },
+    "11": {
       "theme": "Tree Core",
       "problems": [
         {
@@ -273,7 +398,7 @@
         }
       ]
     },
-    "8": {
+    "12": {
       "theme": "Tree Logic Expansion",
       "problems": [
         {
@@ -313,7 +438,33 @@
         }
       ]
     },
-    "9": {
+    "13": {
+      "theme": "Advanced Trees",
+      "problems": [
+        {
+          "name": "Binary Tree Maximum Path Sum",
+          "slug": "binary-tree-maximum-path-sum",
+          "difficulty": "Hard",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Count Complete Tree Nodes",
+          "slug": "count-complete-tree-nodes",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "medium"
+        },
+        {
+          "name": "Construct Binary Tree from Preorder and Inorder",
+          "slug": "construct-binary-tree-from-preorder-and-inorder-traversal",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        }
+      ]
+    },
+    "14": {
       "theme": "Graphs",
       "problems": [
         {
@@ -346,7 +497,7 @@
         }
       ]
     },
-    "10": {
+    "15": {
       "theme": "Graphs",
       "problems": [
         {
@@ -379,7 +530,40 @@
         }
       ]
     },
-    "11": {
+    "16": {
+      "theme": "Union Find",
+      "problems": [
+        {
+          "name": "Number of Connected Components in an Undirected Graph",
+          "slug": "number-of-connected-components-in-an-undirected-graph",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Redundant Connection",
+          "slug": "redundant-connection",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Most Stones Removed with Same Row or Column",
+          "slug": "most-stones-removed-with-same-row-or-column",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "medium"
+        },
+        {
+          "name": "Accounts Merge",
+          "slug": "accounts-merge",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        }
+      ]
+    },
+    "17": {
       "theme": "Heaps & Intervals",
       "problems": [
         {
@@ -419,33 +603,7 @@
         }
       ]
     },
-    "12": {
-      "theme": "Heaps & Intervals",
-      "problems": [
-        {
-          "name": "Median from Data Stream",
-          "slug": "median-from-data-stream",
-          "difficulty": "Unknown",
-          "estimatedTime": 30,
-          "priority": "medium"
-        },
-        {
-          "name": "Find Median from Data Stream (yes, twice—on purpose)",
-          "slug": "find-median-from-data-stream-yes-twiceon-purpose",
-          "difficulty": "Unknown",
-          "estimatedTime": 30,
-          "priority": "medium"
-        },
-        {
-          "name": "Employee Free Time",
-          "slug": "employee-free-time",
-          "difficulty": "Unknown",
-          "estimatedTime": 30,
-          "priority": "medium"
-        }
-      ]
-    },
-    "13": {
+    "18": {
       "theme": "Dynamic Programming",
       "problems": [
         {
@@ -478,7 +636,7 @@
         }
       ]
     },
-    "14": {
+    "19": {
       "theme": "Dynamic Programming",
       "problems": [
         {
@@ -511,7 +669,7 @@
         }
       ]
     },
-    "15": {
+    "20": {
       "theme": "Dynamic Programming",
       "problems": [
         {
@@ -530,7 +688,7 @@
         }
       ]
     },
-    "16": {
+    "21": {
       "theme": "Backtracking",
       "problems": [
         {
@@ -563,36 +721,168 @@
         }
       ]
     },
-    "17": {
-      "theme": "Backtracking",
+    "22": {
+      "theme": "Trie & String Advanced",
       "problems": [
         {
-          "name": "Combination Sum",
-          "slug": "combination-sum",
-          "difficulty": "Unknown",
+          "name": "Implement Trie (Prefix Tree)",
+          "slug": "implement-trie-prefix-tree",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Design Add and Search Words Data Structure",
+          "slug": "design-add-and-search-words-data-structure",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Word Search II",
+          "slug": "word-search-ii",
+          "difficulty": "Hard",
+          "estimatedTime": 60,
+          "priority": "high"
+        },
+        {
+          "name": "Stream of Characters",
+          "slug": "stream-of-characters",
+          "difficulty": "Hard",
+          "estimatedTime": 45,
+          "priority": "medium"
+        }
+      ]
+    },
+    "23": {
+      "theme": "Iterator Design",
+      "problems": [
+        {
+          "name": "Binary Search Tree Iterator",
+          "slug": "binary-search-tree-iterator",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Flatten Nested List Iterator",
+          "slug": "flatten-nested-list-iterator",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Peeking Iterator",
+          "slug": "peeking-iterator",
+          "difficulty": "Medium",
           "estimatedTime": 30,
           "priority": "medium"
         },
         {
-          "name": "Palindrome Partitioning",
-          "slug": "palindrome-partitioning",
-          "difficulty": "Unknown",
+          "name": "Zigzag Iterator",
+          "slug": "zigzag-iterator",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "medium"
+        }
+      ]
+    },
+    "24": {
+      "theme": "Matrix & Vector Operations",
+      "problems": [
+        {
+          "name": "Rotate Image",
+          "slug": "rotate-image",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Sparse Matrix Multiplication",
+          "slug": "sparse-matrix-multiplication",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Valid Sudoku",
+          "slug": "valid-sudoku",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Set Matrix Zeroes",
+          "slug": "set-matrix-zeroes",
+          "difficulty": "Medium",
+          "estimatedTime": 30,
+          "priority": "high"
+        }
+      ]
+    },
+    "25": {
+      "theme": "Math & Probability",
+      "problems": [
+        {
+          "name": "Random Pick with Weight",
+          "slug": "random-pick-with-weight",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Random Pick Index",
+          "slug": "random-pick-index",
+          "difficulty": "Medium",
           "estimatedTime": 30,
           "priority": "medium"
         },
         {
-          "name": "Restore IP Addresses",
-          "slug": "restore-ip-addresses",
-          "difficulty": "Unknown",
+          "name": "Shuffle an Array",
+          "slug": "shuffle-an-array",
+          "difficulty": "Medium",
           "estimatedTime": 30,
+          "priority": "high"
+        },
+        {
+          "name": "Random Point in Non-overlapping Rectangles",
+          "slug": "random-point-in-non-overlapping-rectangles",
+          "difficulty": "Medium",
+          "estimatedTime": 45,
+          "priority": "medium"
+        }
+      ]
+    },
+    "26": {
+      "theme": "Advanced Optimization",
+      "problems": [
+        {
+          "name": "Maximum Profit in Job Scheduling",
+          "slug": "maximum-profit-in-job-scheduling",
+          "difficulty": "Hard",
+          "estimatedTime": 60,
+          "priority": "high"
+        },
+        {
+          "name": "Best Time to Buy and Sell Stock III",
+          "slug": "best-time-to-buy-and-sell-stock-iii",
+          "difficulty": "Hard",
+          "estimatedTime": 45,
+          "priority": "high"
+        },
+        {
+          "name": "Maximum Performance of a Team",
+          "slug": "maximum-performance-of-a-team",
+          "difficulty": "Hard",
+          "estimatedTime": 60,
           "priority": "medium"
         },
         {
-          "name": "N-Queens",
-          "slug": "nqueens",
-          "difficulty": "Unknown",
-          "estimatedTime": 30,
-          "priority": "medium"
+          "name": "Minimum Cost to Hire K Workers",
+          "slug": "minimum-cost-to-hire-k-workers",
+          "difficulty": "Hard",
+          "estimatedTime": 60,
+          "priority": "high"
         }
       ]
     }
