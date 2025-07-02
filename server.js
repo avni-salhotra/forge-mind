@@ -18,7 +18,7 @@ const { ProgressTracker, LeetCodeAPI, EmailService } = require('./tracker');
 const { StudyPlanHelper } = require('./study-plan');
 
 // Import Firebase database service
-const { loadSettings, saveSettings, loadProgress, DEFAULT_SETTINGS, DEFAULT_PROGRESS } = require('./lib/firebase');
+const { databaseService, DEFAULT_SETTINGS, DEFAULT_PROGRESS } = require('./lib/firebase');
 
 function validateNumQuestions(num) {
   const parsed = parseInt(num);
@@ -44,7 +44,7 @@ const tracker = new ProgressTracker();
 // Get current settings
 app.get('/api/settings', async (req, res) => {
   try {
-    const settings = await loadSettings();
+    const settings = await databaseService.loadSettings();
     res.json(settings);
   } catch (error) {
     console.error('Error loading settings:', error);
@@ -62,9 +62,9 @@ app.post('/api/settings', async (req, res) => {
     }
     
     const validatedNum = validateNumQuestions(num_questions);
-    const currentSettings = await loadSettings();
+    const currentSettings = await databaseService.loadSettings();
     
-    const updatedSettings = await saveSettings({
+    const updatedSettings = await databaseService.saveSettings({
       ...currentSettings,
       num_questions: validatedNum
     });
@@ -86,7 +86,7 @@ app.post('/api/settings', async (req, res) => {
 // Get current progress
 app.get('/api/progress', async (req, res) => {
   try {
-    const progress = await loadProgress();
+    const progress = await databaseService.loadProgress();
     res.json(progress);
   } catch (error) {
     console.error('Error loading progress:', error);
@@ -97,8 +97,8 @@ app.get('/api/progress', async (req, res) => {
 // Get comprehensive status
 app.get('/api/status', async (req, res) => {
   try {
-    const settings = await loadSettings();
-    const progress = await loadProgress();
+    const settings = await databaseService.loadSettings();
+    const progress = await databaseService.loadProgress();
     const orderedProblems = StudyPlanHelper.getOrderedProblemList();
     
     // Get problem details for sent problems

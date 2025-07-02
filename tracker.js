@@ -20,7 +20,7 @@ const { format, startOfDay, isToday, parseISO } = require('date-fns');
 const { STUDY_PLAN, TRACKER_CONFIG, StudyPlanHelper } = require('./study-plan');
 
 // Import Firebase database service
-const { loadSettings, saveSettings, loadProgress, saveProgress } = require('./lib/firebase');
+const { databaseService } = require('./lib/firebase');
 
 /**
  * New Data Structure Management
@@ -45,9 +45,6 @@ const DEFAULT_PROGRESS = {
     timestamp: null
   }
 };
-
-// Database functions are now imported from Firebase service
-// loadSettings, saveSettings, loadProgress, saveProgress are available globally
 
 /**
  * Migration function for old progress.json format
@@ -80,7 +77,7 @@ function migrateOldProgress(oldData) {
   };
   
   console.log('✅ Migrated to new format:', migratedProgress);
-  saveProgress(migratedProgress);
+  databaseService.saveProgress(migratedProgress);
   return migratedProgress;
 }
 
@@ -429,7 +426,7 @@ class EmailService {
  */
 class ProgressTracker {
   constructor() {
-    this.leetcodeAPI = new LeetCodeAPI();
+    this.leetcodeApi = new LeetCodeAPI();
     this.emailService = new EmailService();
   }
 
@@ -438,74 +435,83 @@ class ProgressTracker {
    */
   async runDailyRoutine() {
     console.log('\n🕑 Daily routine - Multi-problem support');
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const yesterdayStr = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
     
-    const progress = await loadProgress();
-    const settings = await loadSettings();
-    const username = STUDY_PLAN.username;
+    try {
+      // Load current progress and settings
+      const progress = await databaseService.loadProgress();
+      const settings = await databaseService.loadSettings();
+      
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const yesterdayStr = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
+      
+      const username = STUDY_PLAN.username;
 
-    console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
-    console.log(`📅 Last sent: ${progress.lastSentDate}, Today: ${todayStr}`);
+      console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
+      console.log(`📅 Last sent: ${progress.lastSentDate}, Today: ${todayStr}`);
 
-    // Step 1: Check if any problems from yesterday were solved
-    if (progress.lastSentDate === yesterdayStr && progress.sentProblems.length > 0) {
-      console.log('🔍 Checking yesterday\'s submissions...');
-      await this.updateSolvedStatus(progress, yesterdayStr, username);
-    }
-
-    // Step 2: Calculate what problems to send today
-    const todaysCalculation = calculateTodaysProblems(progress, settings);
-    
-    if (todaysCalculation.problems.length === 0) {
-      console.log('🎉 Study plan completed! No more problems to send.');
-      return;
-    }
-
-    console.log(`📝 Sending ${todaysCalculation.problems.length} problems:`);
-    console.log(`  - Unfinished: ${todaysCalculation.unfinished.length}`);
-    console.log(`  - New: ${todaysCalculation.newProblems.length}`);
-
-    // Step 3: Get problem details for email
-    const problemDetails = this.getProblemDetails(todaysCalculation.problems);
-    const unfinishedDetails = problemDetails.filter(p => todaysCalculation.unfinished.includes(p.slug));
-    const newProblemDetails = problemDetails.filter(p => todaysCalculation.newProblems.includes(p.slug));
-
-    // Step 4: Send appropriate email
-    if (problemDetails.length === 1) {
-      // Single problem - use original email format
-      const problem = problemDetails[0];
-      const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
-      await this.emailService.sendTodaysQuestionEmail(problem, topicName);
-    } else {
-      // Multiple problems - use new email format
-      await this.emailService.sendMultipleProblemsEmail(problemDetails, {
-        unfinished: unfinishedDetails,
-        newProblems: newProblemDetails,
-        totalCount: problemDetails.length
-      });
-    }
-
-    // Step 5: Update progress
-    const newSentProblems = todaysCalculation.problems.map(slug => ({
-      slug: slug,
-      solved: false,
-      sentDate: todayStr
-    }));
-
-    const newProgress = {
-      lastSentDate: todayStr,
-      sentProblems: newSentProblems,
-      studyPlanPosition: todaysCalculation.updatedPosition,
-      pendingQueue: todaysCalculation.updatedPendingQueue,
-      settingsAtSendTime: {
-        num_questions: settings.num_questions,
-        timestamp: new Date().toISOString()
+      // Step 1: Check if any problems from yesterday were solved
+      if (progress.lastSentDate === yesterdayStr && progress.sentProblems.length > 0) {
+        console.log('🔍 Checking yesterday\'s submissions...');
+        await this.updateSolvedStatus(progress, yesterdayStr, username);
       }
-    };
 
-    await saveProgress(newProgress);
-    console.log(`✅ Daily routine completed. Progress saved.`);
+      // Step 2: Calculate what problems to send today
+      const todaysCalculation = calculateTodaysProblems(progress, settings);
+      
+      if (todaysCalculation.problems.length === 0) {
+        console.log('🎉 Study plan completed! No more problems to send.');
+        return;
+      }
+
+      console.log(`📝 Sending ${todaysCalculation.problems.length} problems:`);
+      console.log(`  - Unfinished: ${todaysCalculation.unfinished.length}`);
+      console.log(`  - New: ${todaysCalculation.newProblems.length}`);
+
+      // Step 3: Get problem details for email
+      const problemDetails = this.getProblemDetails(todaysCalculation.problems);
+      const unfinishedDetails = problemDetails.filter(p => todaysCalculation.unfinished.includes(p.slug));
+      const newProblemDetails = problemDetails.filter(p => todaysCalculation.newProblems.includes(p.slug));
+
+      // Step 4: Send appropriate email
+      if (problemDetails.length === 1) {
+        // Single problem - use original email format
+        const problem = problemDetails[0];
+        const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
+        await this.emailService.sendTodaysQuestionEmail(problem, topicName);
+      } else {
+        // Multiple problems - use new email format
+        await this.emailService.sendMultipleProblemsEmail(problemDetails, {
+          unfinished: unfinishedDetails,
+          newProblems: newProblemDetails,
+          totalCount: problemDetails.length
+        });
+      }
+
+      // Step 5: Update progress
+      const newSentProblems = todaysCalculation.problems.map(slug => ({
+        slug: slug,
+        solved: false,
+        sentDate: todayStr
+      }));
+
+      const newProgress = {
+        lastSentDate: todayStr,
+        sentProblems: newSentProblems,
+        studyPlanPosition: todaysCalculation.updatedPosition,
+        pendingQueue: todaysCalculation.updatedPendingQueue,
+        settingsAtSendTime: {
+          num_questions: settings.num_questions,
+          timestamp: new Date().toISOString()
+        }
+      };
+
+      // Save updated progress
+      await databaseService.saveProgress(newProgress);
+      console.log(`✅ Daily routine completed. Progress saved.`);
+    } catch (error) {
+      console.error('❌ Daily routine failed:', error);
+      throw error;
+    }
   }
 
   /**
@@ -513,7 +519,7 @@ class ProgressTracker {
    */
   async updateSolvedStatus(progress, checkDate, username) {
     try {
-      const submissions = await this.leetcodeAPI.getUserSubmissions(username, 100);
+      const submissions = await this.leetcodeApi.getUserSubmissions(username, 100);
       
       // Filter submissions from the check date
       const dateSubmissions = submissions.submission.filter(s => {
@@ -535,7 +541,7 @@ class ProgressTracker {
       });
 
       if (solvedCount > 0) {
-        await saveProgress(progress);
+        await databaseService.saveProgress(progress);
         console.log(`🎉 Updated ${solvedCount} problems as solved!`);
       }
 
@@ -585,12 +591,12 @@ class ProgressTracker {
     try {
       // Test API connection
       console.log('1. Testing API connection...');
-      const profile = await this.leetcodeAPI.getUserProfile(STUDY_PLAN.username);
+      const profile = await this.leetcodeApi.getUserProfile(STUDY_PLAN.username);
       console.log(`✅ Connected! User: ${profile.username}, Ranking: ${profile.ranking}\n`);
 
       // Test submissions
       console.log('2. Testing submissions...');
-      const submissions = await this.leetcodeAPI.getUserSubmissions(STUDY_PLAN.username, 5);
+      const submissions = await this.leetcodeApi.getUserSubmissions(STUDY_PLAN.username, 5);
       console.log(`✅ Recent submissions: ${submissions.count} total, showing ${submissions.submission.length}\n`);
 
       // Test study plan
@@ -601,8 +607,8 @@ class ProgressTracker {
 
       // Test settings and progress
       console.log('4. Testing settings and progress...');
-      const settings = await loadSettings();
-      const progress = await loadProgress();
+      const settings = await databaseService.loadSettings();
+      const progress = await databaseService.loadProgress();
       console.log(`✅ Settings loaded: ${settings.num_questions} problems per day`);
       console.log(`✅ Progress loaded: Position ${progress.studyPlanPosition}/${orderedProblems.length}`);
       console.log(`✅ Sent problems: ${progress.sentProblems.length}, Pending queue: ${progress.pendingQueue.length}\n`);
@@ -712,7 +718,7 @@ Make sure to:
  * Handle settings command
  */
 async function handleSettingsCommand(subcommand) {
-  const settings = await loadSettings();
+  const settings = await databaseService.loadSettings();
 
   switch (subcommand) {
     case 'get':
@@ -732,7 +738,7 @@ async function handleSettingsCommand(subcommand) {
       }
 
       const validatedNum = validateNumQuestions(newNum);
-      const updatedSettings = await saveSettings({
+      const updatedSettings = await databaseService.saveSettings({
         ...settings,
         num_questions: validatedNum
       });
@@ -758,8 +764,8 @@ async function handleSettingsCommand(subcommand) {
  * Show current status
  */
 async function showStatus() {
-  const settings = await loadSettings();
-  const progress = await loadProgress();
+  const settings = await databaseService.loadSettings();
+  const progress = await databaseService.loadProgress();
   const orderedProblems = StudyPlanHelper.getOrderedProblemList();
 
   console.log('\n📊 LeetCode Tracker Status\n');
