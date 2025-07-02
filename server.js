@@ -39,6 +39,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'frontend')));
 
+// Serve static files from diagrams directory
+app.use('/diagrams', express.static(path.join(__dirname, 'diagrams')));
+
 // Create tracker instance
 const tracker = new ProgressTracker();
 

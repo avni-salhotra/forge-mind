@@ -110,12 +110,36 @@ function getCurrentTopic() {
  */
 function getMermaidImageUrl(mermaidCode) {
     try {
-        // Remove any quotes and escape special characters
-        const cleanCode = mermaidCode.replace(/['"]/g, '').trim();
-        // First encode the diagram using pako (same as Mermaid Live Editor)
-        const encoded = Buffer.from(cleanCode).toString('base64');
-        // Use the encoded string in the mermaid.ink URL with dark theme and white background
-        return `https://mermaid.ink/img/${encoded}?theme=dark&bgColor=!white`;
+        // Extract topic name from the current context
+        const topic = getCurrentTopic();
+        if (!topic) return null;
+        
+        // Convert topic name to filename (same as in render-diagrams.js)
+        const fileName = topic.name.toLowerCase().replace(/[s/]+/g, '-') + '.png';
+        
+        // Return path to static image
+        // In production, this should be a full URL to where the images are hosted
+        return `${process.env.BASE_URL}/diagrams/${fileName}`;
+    } catch (error) {
+        console.error('Error getting diagram image URL:', error);
+        return null;
+    }
+}/diagrams/${fileName}`;
+    } catch (error) {
+        console.error('Error getting diagram image URL:', error);
+        return null;
+    }
+}/diagrams/${fileName}`;
+    } catch (error) {
+        console.error('Error getting diagram image URL:', error);
+        return null;
+    }
+}/diagrams/${fileName}`;
+    } catch (error) {
+        console.error('Error getting diagram image URL:', error);
+        return null;
+    }
+}?theme=dark&bgColor=!white`;
     } catch (error) {
         console.error('Error creating Mermaid diagram URL:', error);
         return null;

@@ -10,12 +10,12 @@
         "week": 1,
         "name": "Rate Limiter",
         "description": "Fundamental distributed systems concept for controlling request flow",
-        "diagram": "```mermaid\ngraph LR\n    Client-->|Request|RateLimit[Rate Limiter]\n    RateLimit-->|Allow/Deny|API[API Server]\n    RateLimit-->|Store State|Redis[(Redis)]```",
+        "diagram": "graph LR\n    Client-->|Request|RateLimit[Rate Limiter]\n    RateLimit-->|Allow/Deny|API[API Server]\n    RateLimit-->|Store State|Redis[Redis]",
         "videoResources": {
           "neetcode": {
             "available": true,
             "topicName": "Design a Rate Limiter",
-            "duration": "29 min"
+            "duration": "23 min"
           },
           "designGurus": {
             "available": false
@@ -37,6 +37,11 @@
             "title": "AWS API Gateway Rate Limiting",
             "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html",
             "type": "documentation"
+          },
+          {
+            "title": "Rate Limiting Patterns",
+            "url": "https://konghq.com/blog/how-to-design-a-scalable-rate-limiting-algorithm",
+            "type": "tutorial"
           }
         ],
         "realWorldExamples": [
@@ -49,6 +54,11 @@
             "company": "GitHub",
             "description": "API rate limiting implementation",
             "url": "https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting"
+          },
+          {
+            "company": "Shopify",
+            "description": "GraphQL API rate limiting",
+            "url": "https://shopify.engineering/rate-limiting-graphql-apis-calculating-query-complexity"
           }
         ]
       },
@@ -56,7 +66,7 @@
         "week": 2,
         "name": "URL Shortener",
         "description": "Classic system design problem covering hashing, databases, and caching",
-        "diagram": "```mermaid\ngraph LR\n    Client-->|Long URL|Hash[Hash Service]\n    Hash-->|Short Code|DB[(Database)]\n    Client-->|Short URL|Cache{Cache}\n    Cache-->|Hit|Client\n    Cache-->|Miss|DB```",
+        "diagram": "graph LR\n    Client-->|Long URL|Hash[Hash Service]\n    Hash-->|Short Code|DB[Database]\n    Client-->|Short URL|Cache[Cache]\n    Cache-->|Hit|Client\n    Cache-->|Miss|DB",
         "videoResources": {
           "neetcode": {
             "available": true,
@@ -84,6 +94,11 @@
             "title": "System Design: URL Shortener",
             "url": "https://medium.com/system-design-blog/url-shortener-system-design-233cf914f1c2",
             "type": "tutorial"
+          },
+          {
+            "title": "Building a URL Shortener with Redis",
+            "url": "https://redis.com/solutions/use-cases/url-shortener/",
+            "type": "tutorial"
           }
         ],
         "realWorldExamples": [
@@ -96,6 +111,11 @@
             "company": "TinyURL",
             "description": "Original URL shortener service",
             "url": "https://tinyurl.com/app"
+          },
+          {
+            "company": "Twitter (t.co)",
+            "description": "Custom URL shortener for social media",
+            "url": "https://developer.twitter.com/en/docs/tco"
           }
         ]
       },
@@ -103,7 +123,7 @@
         "week": 3,
         "name": "Key-Value Store",
         "description": "Fundamental distributed storage system with focus on consistency and scalability",
-        "diagram": "```mermaid\ngraph LR\n    Client-->|Get/Put|Coordinator[Coordinator]\n    Coordinator-->|Hash Ring|Node1[(Node 1)]\n    Coordinator-->|Consistent Hash|Node2[(Node 2)]\n    Coordinator-->|Replication|Node3[(Node 3)]```",
+        "diagram": "graph LR\n    Client-->|Get/Put|Coordinator[Coordinator]\n    Coordinator-->|Hash Ring|Node1[Node 1]\n    Coordinator-->|Consistent Hash|Node2[Node 2]\n    Coordinator-->|Replication|Node3[Node 3]",
         "videoResources": {
           "neetcode": {
             "available": true,
@@ -132,6 +152,11 @@
             "title": "Cassandra: The Definitive Guide",
             "url": "https://www.datastax.com/resources/ebook/oreilly-cassandra-definitive-guide",
             "type": "book_excerpt"
+          },
+          {
+            "title": "Consistent Hashing Explained",
+            "url": "https://www.toptal.com/big-data/consistent-hashing",
+            "type": "tutorial"
           }
         ],
         "realWorldExamples": [
@@ -144,6 +169,11 @@
             "company": "Redis",
             "description": "In-memory key-value store implementation",
             "url": "https://redis.io/topics/introduction"
+          },
+          {
+            "company": "Riak",
+            "description": "Distributed NoSQL database",
+            "url": "https://riak.com/posts/technical/how-riak-kv-works/"
           }
         ]
       }
@@ -153,7 +183,7 @@
         "week": 4,
         "name": "Twitter Feed",
         "description": "Complex feed generation system with real-time updates and fan-out",
-        "diagram": "```mermaid\ngraph LR\n    Post-->|Write|Cache[Redis Cache]\n    Post-->|Store|DB[(Database)]\n    Post-->|Fan-out|Queue[Message Queue]\n    Queue-->|Process|Worker[Feed Generator]\n    Worker-->|Update|UserFeeds[(User Feeds)]```",
+        "diagram": "graph LR\n    Post-->|Write|Cache[Redis Cache]\n    Post-->|Store|DB[Database]\n    Post-->|Fan-out|Queue[Message Queue]\n    Queue-->|Process|Worker[Feed Generator]\n    Worker-->|Update|UserFeeds[User Feeds]",
         "videoResources": {
           "neetcode": {
             "available": true,
@@ -182,6 +212,11 @@
             "title": "Scaling Feeds with Redis",
             "url": "https://redis.com/solutions/use-cases/social-media-feed/",
             "type": "tutorial"
+          },
+          {
+            "title": "Feed Ranking Systems",
+            "url": "https://instagram-engineering.com/feed-ranking-at-instagram-f2c1c6e50657",
+            "type": "engineering_blog"
           }
         ],
         "realWorldExamples": [
@@ -194,6 +229,11 @@
             "company": "Instagram",
             "description": "Feed ranking and delivery system",
             "url": "https://instagram-engineering.com/search?q=feed"
+          },
+          {
+            "company": "LinkedIn",
+            "description": "Feed personalization architecture",
+            "url": "https://engineering.linkedin.com/blog/2016/03/followfeed--linkedin-s-feed-made-faster-and-smarter"
           }
         ]
       },
@@ -201,7 +241,7 @@
         "week": 5,
         "name": "Google Drive",
         "description": "Distributed file storage system with sharing and versioning",
-        "diagram": "```mermaid\ngraph LR\n    Client-->|Upload|Metadata[Metadata Service]\n    Client-->|Store|Chunks[Chunk Store]\n    Metadata-->|Index|Search[Search Service]\n    Chunks-->|Replicate|Storage[(Distributed Storage)]```",
+        "diagram": "graph LR\n    Client-->|Upload|LoadBalancer[Load Balancer]\n    LoadBalancer-->|Route|Servers[API Servers]\n    Servers-->|Metadata|MetaDB[Metadata DB]\n    Servers-->|Store|Storage[Distributed Storage]",
         "videoResources": {
           "neetcode": {
             "available": true,
@@ -230,6 +270,11 @@
             "title": "Dropbox Architecture",
             "url": "https://www.youtube.com/watch?v=PE4gwstWhmc",
             "type": "video"
+          },
+          {
+            "title": "File System Design",
+            "url": "https://www.educative.io/blog/distributed-file-system-design",
+            "type": "tutorial"
           }
         ],
         "realWorldExamples": [
@@ -242,16 +287,19 @@
             "company": "Box",
             "description": "Enterprise file sharing architecture",
             "url": "https://blog.box.com/engineering"
+          },
+          {
+            "company": "OneDrive",
+            "description": "Microsoft's cloud storage system",
+            "url": "https://techcommunity.microsoft.com/t5/microsoft-onedrive-blog/bg-p/OneDriveBlog"
           }
         ]
-      }
-    ],
-    "tier3": [
+      },
       {
         "week": 6,
         "name": "Discord/Real-time Chat",
         "description": "Real-time messaging system with presence and status updates",
-        "diagram": "```mermaid\ngraph LR\n    Client-->|WebSocket|Gateway[Gateway Service]\n    Gateway-->|Pub/Sub|Redis[Redis PubSub]\n    Gateway-->|Store|Messages[(Message Store)]\n    Gateway-->|Status|Presence[Presence Service]```",
+        "diagram": "graph LR\n    Client-->|Connect|Gateway[Gateway Server]\n    Gateway-->|Pub/Sub|Redis[Redis PubSub]\n    Gateway-->|Store|DB[Message Store]\n    Gateway-->|Push|WS[WebSocket Pool]\n    WS-->|Real-time|Client",
         "videoResources": {
           "neetcode": {
             "available": true,
@@ -280,6 +328,11 @@
             "title": "WebSocket Best Practices",
             "url": "https://www.nginx.com/blog/websocket-nginx/",
             "type": "tutorial"
+          },
+          {
+            "title": "Real-time Messaging Patterns",
+            "url": "https://www.ably.io/blog/websockets-vs-sse-vs-long-polling",
+            "type": "comparison"
           }
         ],
         "realWorldExamples": [
@@ -292,6 +345,11 @@
             "company": "Slack",
             "description": "Real-time messaging architecture",
             "url": "https://slack.engineering/real-time-messaging/"
+          },
+          {
+            "company": "WhatsApp",
+            "description": "Message delivery system",
+            "url": "https://engineering.whatsapp.com/"
           }
         ]
       },
@@ -299,7 +357,7 @@
         "week": 7,
         "name": "YouTube",
         "description": "Video streaming platform with processing and delivery",
-        "diagram": "```mermaid\ngraph LR\n    Upload-->|Process|Encoder[Encoding Service]\n    Encoder-->|Store|Storage[(Cloud Storage)]\n    Storage-->|Serve|CDN[CDN]\n    CDN-->|Stream|Client```",
+        "diagram": "graph LR\n    Upload-->|Process|Encoder[Video Encoder]\n    Encoder-->|Store|CDN[CDN]\n    Client-->|Request|LoadBalancer[Load Balancer]\n    LoadBalancer-->|Route|CDN\n    CDN-->|Stream|Client",
         "videoResources": {
           "neetcode": {
             "available": true,
@@ -328,6 +386,11 @@
             "title": "Video Streaming Fundamentals",
             "url": "https://www.cloudflare.com/learning/video/what-is-streaming/",
             "type": "tutorial"
+          },
+          {
+            "title": "Video Processing at Scale",
+            "url": "https://aws.amazon.com/blogs/media/processing-user-generated-content-using-aws-elemental-mediaconvert/",
+            "type": "tutorial"
           }
         ],
         "realWorldExamples": [
@@ -340,6 +403,11 @@
             "company": "Netflix",
             "description": "Content delivery network architecture",
             "url": "https://netflixtechblog.com/how-netflix-works-with-isps-around-the-globe-to-deliver-a-great-viewing-experience-c40c25b3b9fb"
+          },
+          {
+            "company": "Twitch",
+            "description": "Live streaming infrastructure",
+            "url": "https://blog.twitch.tv/en/tags/engineering/"
           }
         ]
       },
@@ -347,7 +415,7 @@
         "week": 8,
         "name": "Distributed Message Queue",
         "description": "Scalable message queue system with guaranteed delivery",
-        "diagram": "```mermaid\ngraph LR\n    Producer-->|Send|Broker[Message Broker]\n    Broker-->|Store|Topics[(Topics/Partitions)]\n    Topics-->|Consume|Consumer1[Consumer Group 1]\n    Topics-->|Consume|Consumer2[Consumer Group 2]```",
+        "diagram": "graph LR\n    Producer-->|Send|Broker[Message Broker]\n    Broker-->|Store|Storage[Storage Layer]\n    Broker-->|Distribute|Consumer1[Consumer Group 1]\n    Broker-->|Distribute|Consumer2[Consumer Group 2]",
         "videoResources": {
           "neetcode": {
             "available": true,
@@ -376,6 +444,11 @@
             "title": "RabbitMQ vs Kafka",
             "url": "https://www.cloudamqp.com/blog/when-to-use-rabbitmq-or-apache-kafka.html",
             "type": "comparison"
+          },
+          {
+            "title": "Message Queue Patterns",
+            "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/",
+            "type": "patterns"
           }
         ],
         "realWorldExamples": [
@@ -388,6 +461,11 @@
             "company": "Uber",
             "description": "Message queue for real-time analytics",
             "url": "https://eng.uber.com/reliable-reprocessing/"
+          },
+          {
+            "company": "Airbnb",
+            "description": "Stream processing pipeline",
+            "url": "https://medium.com/airbnb-engineering/stream-processing-airbnb-streaming-platform-705f9c22fb3f"
           }
         ]
       }
