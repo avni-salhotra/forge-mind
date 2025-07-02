@@ -1,0 +1,396 @@
+{
+  "metadata": {
+    "emailSchedule": "0 2 * * 6",
+    "startDate": "2024-03-23",
+    "description": "System Design Study Plan - Separate from LeetCode tracking"
+  },
+  "topics": {
+    "tier1": [
+      {
+        "week": 1,
+        "name": "Rate Limiter",
+        "description": "Fundamental distributed systems concept for controlling request flow",
+        "diagram": "```mermaid\ngraph LR\n    Client-->|Request|RateLimit[Rate Limiter]\n    RateLimit-->|Allow/Deny|API[API Server]\n    RateLimit-->|Store State|Redis[(Redis)]```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design a Rate Limiter",
+            "duration": "29 min"
+          },
+          "designGurus": {
+            "available": false
+          }
+        },
+        "keyConcepts": [
+          "Token Bucket Algorithm",
+          "Sliding Window",
+          "Distributed Rate Limiting",
+          "Redis for Rate Limiting"
+        ],
+        "freeResources": [
+          {
+            "title": "Stripe Rate Limiting Guide",
+            "url": "https://stripe.com/blog/rate-limiters",
+            "type": "engineering_blog"
+          },
+          {
+            "title": "AWS API Gateway Rate Limiting",
+            "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html",
+            "type": "documentation"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "Cloudflare",
+            "description": "How they handle DDoS protection using rate limiting",
+            "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+          },
+          {
+            "company": "GitHub",
+            "description": "API rate limiting implementation",
+            "url": "https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting"
+          }
+        ]
+      },
+      {
+        "week": 2,
+        "name": "URL Shortener",
+        "description": "Classic system design problem covering hashing, databases, and caching",
+        "diagram": "```mermaid\ngraph LR\n    Client-->|Long URL|Hash[Hash Service]\n    Hash-->|Short Code|DB[(Database)]\n    Client-->|Short URL|Cache{Cache}\n    Cache-->|Hit|Client\n    Cache-->|Miss|DB```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design TinyURL",
+            "duration": "27 min"
+          },
+          "designGurus": {
+            "available": true,
+            "topicName": "Designing URL Shortening and Pastebin"
+          }
+        },
+        "keyConcepts": [
+          "Hash Functions",
+          "Collision Handling",
+          "Caching Strategies",
+          "Database Scaling"
+        ],
+        "freeResources": [
+          {
+            "title": "How Bitly Handles 6 Billion Clicks a Month",
+            "url": "https://highscalability.com/blog/2014/7/14/bitly-lessons-learned-building-a-distributed-system-that-han.html",
+            "type": "case_study"
+          },
+          {
+            "title": "System Design: URL Shortener",
+            "url": "https://medium.com/system-design-blog/url-shortener-system-design-233cf914f1c2",
+            "type": "tutorial"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "Bitly",
+            "description": "Scaling to billions of redirects",
+            "url": "https://bitly.com/pages/resources/about"
+          },
+          {
+            "company": "TinyURL",
+            "description": "Original URL shortener service",
+            "url": "https://tinyurl.com/app"
+          }
+        ]
+      },
+      {
+        "week": 3,
+        "name": "Key-Value Store",
+        "description": "Fundamental distributed storage system with focus on consistency and scalability",
+        "diagram": "```mermaid\ngraph LR\n    Client-->|Get/Put|Coordinator[Coordinator]\n    Coordinator-->|Hash Ring|Node1[(Node 1)]\n    Coordinator-->|Consistent Hash|Node2[(Node 2)]\n    Coordinator-->|Replication|Node3[(Node 3)]```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design a Key-Value Store",
+            "duration": "31 min"
+          },
+          "designGurus": {
+            "available": true,
+            "topicName": "Designing a Key-Value Store & Consistent Hashing"
+          }
+        },
+        "keyConcepts": [
+          "Consistent Hashing",
+          "Replication Strategies",
+          "CAP Theorem",
+          "Conflict Resolution",
+          "Gossip Protocol"
+        ],
+        "freeResources": [
+          {
+            "title": "DynamoDB Architecture",
+            "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.html",
+            "type": "documentation"
+          },
+          {
+            "title": "Cassandra: The Definitive Guide",
+            "url": "https://www.datastax.com/resources/ebook/oreilly-cassandra-definitive-guide",
+            "type": "book_excerpt"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "Amazon",
+            "description": "DynamoDB architecture and design principles",
+            "url": "https://www.allthingsdistributed.com/2007/10/amazons_dynamo.html"
+          },
+          {
+            "company": "Redis",
+            "description": "In-memory key-value store implementation",
+            "url": "https://redis.io/topics/introduction"
+          }
+        ]
+      }
+    ],
+    "tier2": [
+      {
+        "week": 4,
+        "name": "Twitter Feed",
+        "description": "Complex feed generation system with real-time updates and fan-out",
+        "diagram": "```mermaid\ngraph LR\n    Post-->|Write|Cache[Redis Cache]\n    Post-->|Store|DB[(Database)]\n    Post-->|Fan-out|Queue[Message Queue]\n    Queue-->|Process|Worker[Feed Generator]\n    Worker-->|Update|UserFeeds[(User Feeds)]```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design Twitter",
+            "duration": "26 min"
+          },
+          "designGurus": {
+            "available": true,
+            "topicName": "Designing Facebook Newsfeed"
+          }
+        },
+        "keyConcepts": [
+          "Feed Generation",
+          "Fan-out on Write vs Read",
+          "Timeline Ranking",
+          "Real-time Updates",
+          "Cache Invalidation"
+        ],
+        "freeResources": [
+          {
+            "title": "Twitter's Timeline Architecture",
+            "url": "https://blog.twitter.com/engineering/en_us/topics/infrastructure/2017/the-infrastructure-behind-twitter-scale",
+            "type": "engineering_blog"
+          },
+          {
+            "title": "Scaling Feeds with Redis",
+            "url": "https://redis.com/solutions/use-cases/social-media-feed/",
+            "type": "tutorial"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "Twitter",
+            "description": "How Twitter handles millions of tweets per second",
+            "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+          },
+          {
+            "company": "Instagram",
+            "description": "Feed ranking and delivery system",
+            "url": "https://instagram-engineering.com/search?q=feed"
+          }
+        ]
+      },
+      {
+        "week": 5,
+        "name": "Google Drive",
+        "description": "Distributed file storage system with sharing and versioning",
+        "diagram": "```mermaid\ngraph LR\n    Client-->|Upload|Metadata[Metadata Service]\n    Client-->|Store|Chunks[Chunk Store]\n    Metadata-->|Index|Search[Search Service]\n    Chunks-->|Replicate|Storage[(Distributed Storage)]```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design Google Drive",
+            "duration": "23 min"
+          },
+          "designGurus": {
+            "available": true,
+            "topicName": "Designing Dropbox"
+          }
+        },
+        "keyConcepts": [
+          "Chunking & Deduplication",
+          "Metadata Management",
+          "Synchronization",
+          "Version Control",
+          "Access Control"
+        ],
+        "freeResources": [
+          {
+            "title": "Google File System Paper",
+            "url": "https://static.googleusercontent.com/media/research.google.com/en//archive/gfs-sosp2003.pdf",
+            "type": "research_paper"
+          },
+          {
+            "title": "Dropbox Architecture",
+            "url": "https://www.youtube.com/watch?v=PE4gwstWhmc",
+            "type": "video"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "Dropbox",
+            "description": "How Dropbox stores petabytes of data",
+            "url": "https://dropbox.tech/infrastructure/"
+          },
+          {
+            "company": "Box",
+            "description": "Enterprise file sharing architecture",
+            "url": "https://blog.box.com/engineering"
+          }
+        ]
+      }
+    ],
+    "tier3": [
+      {
+        "week": 6,
+        "name": "Discord/Real-time Chat",
+        "description": "Real-time messaging system with presence and status updates",
+        "diagram": "```mermaid\ngraph LR\n    Client-->|WebSocket|Gateway[Gateway Service]\n    Gateway-->|Pub/Sub|Redis[Redis PubSub]\n    Gateway-->|Store|Messages[(Message Store)]\n    Gateway-->|Status|Presence[Presence Service]```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design Discord",
+            "duration": "23 min"
+          },
+          "designGurus": {
+            "available": true,
+            "topicName": "Designing Facebook Messenger"
+          }
+        },
+        "keyConcepts": [
+          "WebSocket Management",
+          "Presence System",
+          "Message Ordering",
+          "State Synchronization",
+          "Push Notifications"
+        ],
+        "freeResources": [
+          {
+            "title": "Discord Architecture",
+            "url": "https://blog.discord.com/how-discord-stores-billions-of-messages-7fa6ec7ee4c7",
+            "type": "engineering_blog"
+          },
+          {
+            "title": "WebSocket Best Practices",
+            "url": "https://www.nginx.com/blog/websocket-nginx/",
+            "type": "tutorial"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "Discord",
+            "description": "Scaling to millions of concurrent users",
+            "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+          },
+          {
+            "company": "Slack",
+            "description": "Real-time messaging architecture",
+            "url": "https://slack.engineering/real-time-messaging/"
+          }
+        ]
+      },
+      {
+        "week": 7,
+        "name": "YouTube",
+        "description": "Video streaming platform with processing and delivery",
+        "diagram": "```mermaid\ngraph LR\n    Upload-->|Process|Encoder[Encoding Service]\n    Encoder-->|Store|Storage[(Cloud Storage)]\n    Storage-->|Serve|CDN[CDN]\n    CDN-->|Stream|Client```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design YouTube",
+            "duration": "26 min"
+          },
+          "designGurus": {
+            "available": true,
+            "topicName": "Designing YouTube"
+          }
+        },
+        "keyConcepts": [
+          "Video Processing Pipeline",
+          "CDN Architecture",
+          "Adaptive Bitrate Streaming",
+          "Recommendation System",
+          "Analytics Processing"
+        ],
+        "freeResources": [
+          {
+            "title": "YouTube Architecture",
+            "url": "https://highscalability.com/blog/2012/3/26/7-years-of-youtube-scalability-lessons-in-30-minutes.html",
+            "type": "case_study"
+          },
+          {
+            "title": "Video Streaming Fundamentals",
+            "url": "https://www.cloudflare.com/learning/video/what-is-streaming/",
+            "type": "tutorial"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "YouTube",
+            "description": "Video delivery and processing at scale",
+            "url": "https://www.youtube.com/watch?v=w5WVu624fY8"
+          },
+          {
+            "company": "Netflix",
+            "description": "Content delivery network architecture",
+            "url": "https://netflixtechblog.com/how-netflix-works-with-isps-around-the-globe-to-deliver-a-great-viewing-experience-c40c25b3b9fb"
+          }
+        ]
+      },
+      {
+        "week": 8,
+        "name": "Distributed Message Queue",
+        "description": "Scalable message queue system with guaranteed delivery",
+        "diagram": "```mermaid\ngraph LR\n    Producer-->|Send|Broker[Message Broker]\n    Broker-->|Store|Topics[(Topics/Partitions)]\n    Topics-->|Consume|Consumer1[Consumer Group 1]\n    Topics-->|Consume|Consumer2[Consumer Group 2]```",
+        "videoResources": {
+          "neetcode": {
+            "available": true,
+            "topicName": "Design a Distributed Message Queue",
+            "duration": "23 min"
+          },
+          "designGurus": {
+            "available": true,
+            "topicName": "Designing a Distributed Messaging System"
+          }
+        },
+        "keyConcepts": [
+          "Message Persistence",
+          "Partition Management",
+          "Consumer Groups",
+          "Exactly-Once Delivery",
+          "Fault Tolerance"
+        ],
+        "freeResources": [
+          {
+            "title": "Apache Kafka Architecture",
+            "url": "https://kafka.apache.org/documentation/#design",
+            "type": "documentation"
+          },
+          {
+            "title": "RabbitMQ vs Kafka",
+            "url": "https://www.cloudamqp.com/blog/when-to-use-rabbitmq-or-apache-kafka.html",
+            "type": "comparison"
+          }
+        ],
+        "realWorldExamples": [
+          {
+            "company": "LinkedIn",
+            "description": "Kafka usage at LinkedIn",
+            "url": "https://engineering.linkedin.com/blog/2019/apache-kafka-trillion-messages"
+          },
+          {
+            "company": "Uber",
+            "description": "Message queue for real-time analytics",
+            "url": "https://eng.uber.com/reliable-reprocessing/"
+          }
+        ]
+      }
+    ]
+  }
+} 

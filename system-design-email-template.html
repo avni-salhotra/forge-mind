@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        .resources {
+            background-color: #f3f4f6;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .video-resource {
+            background-color: #e3f2fd;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .key-concepts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .concept {
+            background-color: #e8f5e9;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+        .example {
+            border-left: 3px solid #2196f3;
+            padding-left: 15px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📚 This Week's System Design Topic: {{topic.name}}</h1>
+        <p>{{topic.description}}</p>
+    </div>
+
+    <div class="section">
+        <h2>🎯 System Overview</h2>
+        {{topic.diagram}}
+    </div>
+
+    <div class="section">
+        <h2>📺 Available Video Resources</h2>
+        {{#if topic.videoResources.neetcode.available}}
+        <div class="video-resource">
+            ✨ <strong>NeetCode:</strong> {{topic.videoResources.neetcode.topicName}} ({{topic.videoResources.neetcode.duration}})
+        </div>
+        {{/if}}
+        {{#if topic.videoResources.designGurus.available}}
+        <div class="video-resource">
+            ✨ <strong>DesignGurus:</strong> {{topic.videoResources.designGurus.topicName}}
+        </div>
+        {{/if}}
+    </div>
+
+    <div class="section">
+        <h2>🔍 Key Concepts</h2>
+        <div class="key-concepts">
+            {{#each topic.keyConcepts}}
+            <span class="concept">{{this}}</span>
+            {{/each}}
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🌐 High-Quality Free Resources</h2>
+        {{#each topic.freeResources}}
+        <div class="resources">
+            <strong>{{this.title}}</strong><br>
+            <a href="{{this.url}}">Read More</a>
+        </div>
+        {{/each}}
+    </div>
+
+    <div class="section">
+        <h2>🏢 Real-World Examples</h2>
+        {{#each topic.realWorldExamples}}
+        <div class="example">
+            <strong>{{this.company}}</strong>
+            <p>{{this.description}}</p>
+            <a href="{{this.url}}">Learn More</a>
+        </div>
+        {{/each}}
+    </div>
+</body>
+</html> 

@@ -20,6 +20,9 @@ const { StudyPlanHelper } = require('./study-plan');
 // Import Firebase database service
 const { databaseService, DEFAULT_SETTINGS, DEFAULT_PROGRESS } = require('./lib/firebase');
 
+// Import system design email sender
+const { sendSystemDesignEmail } = require('./send-system-design');
+
 function validateNumQuestions(num) {
   const parsed = parseInt(num);
   if (isNaN(parsed) || parsed < 1) return 1;
@@ -292,6 +295,34 @@ app.post('/api/daily-routine', async (req, res) => {
       error: 'Failed to run daily routine',
       timestamp: new Date().toISOString(),
       triggered_by: 'github_actions'
+    });
+  }
+});
+
+// System Design Routes (kept separate from LeetCode routes)
+app.post('/api/system-design/send', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    // Basic security check (you should set this in your .env)
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log('📚 Sending system design email...');
+    
+    await sendSystemDesignEmail();
+    
+    res.json({
+      success: true,
+      message: 'System design email sent successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error sending system design email:', error);
+    res.status(500).json({ 
+      error: 'Failed to send system design email',
+      details: error.message 
     });
   }
 });
