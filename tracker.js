@@ -98,7 +98,7 @@ function calculateTodaysProblems(progress, settings) {
   const numQuestions = validateNumQuestions(settings.num_questions);
   const orderedProblems = StudyPlanHelper.getOrderedProblemList();
   
-  // Get unfinished problems from yesterday
+  // Get unfinished problems from any previous day
   const unfinishedProblems = progress.sentProblems
     .filter(p => !p.solved)
     .map(p => p.slug);
@@ -117,10 +117,25 @@ function calculateTodaysProblems(progress, settings) {
   // If we have pending problems
   if (allPending.length > 0) {
     if (allPending.length >= numQuestions) {
-      // More pending than we can send
-      result.problems = allPending.slice(0, numQuestions);
+      // More pending than we can send - prioritize oldest unsolved first
+      const sortedPending = [...allPending];
+      const oldestFirst = progress.sentProblems
+        .filter(p => !p.solved)
+        .sort((a, b) => new Date(a.sentDate) - new Date(b.sentDate))
+        .map(p => p.slug);
+      
+      // Put oldest unsolved problems first
+      oldestFirst.forEach(slug => {
+        const idx = sortedPending.indexOf(slug);
+        if (idx !== -1) {
+          sortedPending.splice(idx, 1);
+          sortedPending.unshift(slug);
+        }
+      });
+      
+      result.problems = sortedPending.slice(0, numQuestions);
       result.unfinished = result.problems;
-      result.updatedPendingQueue = allPending.slice(numQuestions);
+      result.updatedPendingQueue = sortedPending.slice(numQuestions);
     } else {
       // Some pending + some new
       result.unfinished = [...allPending];
@@ -477,7 +492,11 @@ class ProgressTracker {
         // Single problem - use original email format
         const problem = problemDetails[0];
         const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
-        await this.emailService.sendTodaysQuestionEmail(problem, topicName);
+        if (todaysCalculation.unfinished.includes(problem.slug)) {
+          await this.emailService.sendReminderEmail(problem, topicName);
+        } else {
+          await this.emailService.sendTodaysQuestionEmail(problem, topicName);
+        }
       } else {
         // Multiple problems - use new email format
         await this.emailService.sendMultipleProblemsEmail(problemDetails, {
@@ -487,12 +506,21 @@ class ProgressTracker {
         });
       }
 
-      // Step 5: Update progress
-      const newSentProblems = todaysCalculation.problems.map(slug => ({
-        slug: slug,
-        solved: false,
-        sentDate: todayStr
-      }));
+      // Step 5: Update progress - preserve unsolved problems
+      const unsolvedProblems = progress.sentProblems.filter(p => !p.solved);
+      const newSentProblems = todaysCalculation.problems.map(slug => {
+        // Check if this problem was previously unsolved
+        const existingProblem = unsolvedProblems.find(p => p.slug === slug);
+        if (existingProblem) {
+          return existingProblem; // Keep the existing record
+        }
+        // Create new record for new problems
+        return {
+          slug: slug,
+          solved: false,
+          sentDate: todayStr
+        };
+      });
 
       const newProgress = {
         lastSentDate: todayStr,

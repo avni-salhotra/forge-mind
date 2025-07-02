@@ -19,7 +19,7 @@ jobs:
           response=$(curl -s -w "%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
-            "${RENDER_URL}/api/daily-routine")
+            "${RENDER_URL}/api/check")
           
           http_code="${response: -3}"
           
