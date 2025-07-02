@@ -112,7 +112,7 @@ function getMermaidImageUrl(mermaidCode) {
     try {
         // Remove any quotes and escape special characters
         const cleanCode = mermaidCode.replace(/['"]/g, '').trim();
-        const encodedDiagram = encodeURIComponent(cleanCode);
+        // Only use base64 encoding, no URL encoding needed
         return `https://mermaid.ink/img/${Buffer.from(cleanCode).toString('base64')}`;
     } catch (error) {
         console.error('Error creating Mermaid diagram URL:', error);
