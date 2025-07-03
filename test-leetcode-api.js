@@ -300,8 +300,68 @@ async function runAllTests() {
   }
 }
 
-// Run the tests
+// === NEW HELPER: QUICK SUBMISSION CHECK =====================================
+// Usage (example):
+//    node test-leetcode-api.js --date=2025-07-02 --slug=two-sum
+// ---------------------------------------------------------------------------
+async function checkSubmissionOnDate({ username, slug, date }) {
+  const limit = 100; // pull the most-recent 100 accepted submissions
+  const url = `${BASE_URL}/${username}/acSubmission?limit=${limit}`;
+
+  console.log(`\n🔍 Looking for \`${slug}\` in ${username}'s accepted submissions on ${date}`);
+  console.log(`📡 Fetching: ${url}`);
+
+  try {
+    const res = await axios.get(url, { timeout: TEST_CONFIG.timeout });
+    const submissions = Array.isArray(res.data.submission) ? res.data.submission : [];
+    console.log(`✅ Received ${submissions.length} submissions (API count: ${res.data.count})`);
+
+    // UTC midnight boundaries for the target date
+    const startTs = Date.parse(`${date}T00:00:00Z`);
+    const endTs   = startTs + 24 * 60 * 60 * 1000;
+
+    const hits = submissions.filter(s => {
+      const tsMs = Number(s.timestamp) * 1000;
+      const inWindow = tsMs >= startTs && tsMs < endTs;
+      const isAccepted = (s.statusDisplay || '').toLowerCase() === 'accepted';
+      const slugMatch  = s.titleSlug === slug;
+      return inWindow && isAccepted && slugMatch;
+    });
+
+    if (hits.length > 0) {
+      console.log(`🎉 FOUND! ${slug} was accepted ${hits.length} time(s) on ${date}.`);
+    } else {
+      console.log(`❌ Not found. Either the submission isn't within the latest ${limit} accepted entries, or it wasn't accepted on ${date}.`);
+    }
+  } catch (err) {
+    console.error(`💥 Failed to query submissions: ${err.message}`);
+    if (err.response) {
+      console.error('   Response status:', err.response.status);
+      console.error('   Response data:', err.response.data);
+    }
+  }
+}
+
+// --------------------------- CLI ENTRY -------------------------------------
 if (require.main === module) {
+  const argv = process.argv.slice(2);
+
+  // Quick date check mode ----------------------------------------------------
+  const dateArg = argv.find(a => a.startsWith('--date='));
+  const slugArg = argv.find(a => a.startsWith('--slug='));
+  if (dateArg && slugArg) {
+    const date = dateArg.split('=')[1];
+    const slug = slugArg.split('=')[1];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      console.error('❌ Date must be in YYYY-MM-DD format');
+      process.exit(1);
+    }
+    checkSubmissionOnDate({ username: TEST_CONFIG.testUsername, slug, date })
+      .catch(console.error);
+    return;
+  }
+
+  // Default full test suite --------------------------------------------------
   runAllTests().catch(console.error);
 }
 

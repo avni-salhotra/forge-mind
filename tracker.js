@@ -261,12 +261,20 @@ class LeetCodeAPI {
         return [];
       }
       
-      return submissions.submission.filter(sub => {
-        const submissionDateUTC = new Date(parseInt(sub.timestamp) * 1000)
-          .toISOString()
-          .substring(0, 10);
-        return submissionDateUTC === targetDate && (sub.statusDisplay || '').toLowerCase() === 'accepted';
+      // Robust date filter: treat a submission as belonging to checkDate if its Unix
+      // timestamp falls between 00:00-00 UTC and 23:59-59 UTC of that date. This is more
+      // reliable than substring comparisons when daylight-offset differences exist.
+      const startTs = Date.parse(`${targetDate}T00:00:00Z`); // start of target day in UTC
+      const endTs   = startTs + 24 * 60 * 60 * 1000;        // exclusive upper bound
+
+      const dateSubmissions = submissions.submission.filter(s => {
+        const tsMs = parseInt(s.timestamp) * 1000;
+        const inWindow  = tsMs >= startTs && tsMs < endTs;
+        const isAccepted = (s.statusDisplay || '').toLowerCase() === 'accepted';
+        return inWindow && isAccepted;
       });
+
+      return dateSubmissions;
     } catch (error) {
       console.error(`❌ Error fetching submissions for ${targetDate}:`, error.message);
       return [];
@@ -680,15 +688,17 @@ class ProgressTracker {
         return;
       }
       
-      // Use UTC date string to avoid timezone mismatch between server and LeetCode timestamps
-      const dateSubmissions = submissions.submission.filter(s => {
-        const submissionDateUTC = new Date(parseInt(s.timestamp) * 1000)
-          .toISOString()
-          .substring(0, 10); // YYYY-MM-DD in UTC
+      // Robust date filter: treat a submission as belonging to checkDate if its Unix
+      // timestamp falls between 00:00-00 UTC and 23:59-59 UTC of that date. This is more
+      // reliable than substring comparisons when daylight-offset differences exist.
+      const startTs = Date.parse(`${checkDate}T00:00:00Z`); // start of target day in UTC
+      const endTs   = startTs + 24 * 60 * 60 * 1000;        // exclusive upper bound
 
-        const isCorrectDate = submissionDateUTC === checkDate;
+      const dateSubmissions = submissions.submission.filter(s => {
+        const tsMs = parseInt(s.timestamp) * 1000;
+        const inWindow  = tsMs >= startTs && tsMs < endTs;
         const isAccepted = (s.statusDisplay || '').toLowerCase() === 'accepted';
-        return isCorrectDate && isAccepted;
+        return inWindow && isAccepted;
       });
 
       console.log(`📊 Found ${dateSubmissions.length} total submissions from ${checkDate}`);
