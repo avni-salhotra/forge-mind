@@ -204,37 +204,19 @@ async function testSystemDesignEmail(options = {}) {
         validateTopic(topic);
 
         // Generate email content (but don't include in output)
-        const htmlContent = template({ topic });
+        template({ topic });
 
-        console.log('✅ Environment validation passed');
-        console.log('✅ Topic validation passed');
-        console.log('✅ Template compilation successful');
-        console.log('\nCurrent topic:');
-        console.log('-------------');
-        console.log(`Name: ${topic.name}`);
-        console.log(`Description: ${topic.description}`);
-        console.log(`Week: ${topic.week}`);
-        console.log(`Video Resources: ${Object.entries(topic.videoResources)
-            .filter(([_, v]) => v.available)
-            .map(([k]) => k)
-            .join(', ')}`);
+        // Minimal console output
+        console.log(`✅ Test passed - Topic: ${topic.name} (Week ${topic.week})`);
         
         return {
             success: true,
             topic: topic.name,
-            week: topic.week,
-            resources: {
-                neetcode: topic.videoResources.neetcode.available,
-                designGurus: topic.videoResources.designGurus.available
-            },
-            keyConcepts: topic.keyConcepts.length,
-            freeResources: topic.freeResources.length,
-            realWorldExamples: topic.realWorldExamples.length,
-            diagramUrl: getMermaidImageUrl(topic.diagram)
+            week: topic.week
         };
 
     } catch (error) {
-        console.error('❌ Test failed:', error);
+        console.error('❌ Test failed:', error.message);
         return {
             success: false,
             error: error.message
