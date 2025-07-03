@@ -628,7 +628,41 @@ class ProgressTracker {
     console.log('\n🕑 Daily routine - Multi-problem support');
     
     try {
-      // Load current progress and settings
+      // Step 1: Check API health and wake it up if needed
+      console.log('🏥 Checking LeetCode API health...');
+      let apiHealth = await this.leetcodeApi.checkAPIHealth();
+      
+      if (!apiHealth.healthy) {
+        console.log('⚡ API appears to be sleeping, attempting wake-up...');
+        await this.leetcodeApi.wakeUpAPI();
+        
+        // Wait a bit and verify API is actually responding
+        console.log('⏳ Waiting for API to fully wake up...');
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 5000 * attempt)); // 5s, 10s, 15s waits
+          apiHealth = await this.leetcodeApi.checkAPIHealth();
+          
+          if (apiHealth.healthy) {
+            console.log('✅ API is now awake and responding!');
+            break;
+          }
+          
+          if (attempt === 3) {
+            console.log('❌ API failed to wake up after multiple attempts');
+            console.log('💡 Will try again on next scheduled run');
+            return;
+          }
+          
+          console.log(`⏳ API still waking up, attempt ${attempt}/3...`);
+        }
+      }
+
+      // Only proceed if API is healthy
+      if (!apiHealth.healthy) {
+        return;
+      }
+
+      // Step 2: Load progress and settings
       const progress = await databaseService.loadProgress();
       const settings = await databaseService.loadSettings();
       const now = new Date();
@@ -644,19 +678,11 @@ class ProgressTracker {
         return;
       }
 
-      // Step 1: Check API health
-      console.log('🏥 Checking API health...');
-      const apiHealth = await this.leetcodeApi.checkAPIHealth();
-      if (!apiHealth.healthy) {
-        console.log('⚡ API appears to be sleeping, attempting wake-up...');
-        await this.leetcodeApi.wakeUpAPI();
-      }
-
-      // Step 2: Check for solved problems
+      // Step 3: Check for solved problems
       console.log('🔍 Checking for solved problems...');
       await this.updateSolvedStatus(progress, STUDY_PLAN.username);
 
-      // Step 3: Calculate what problems to send today
+      // Step 4: Calculate what problems to send today
       const todaysCalculation = calculateTodaysProblems(progress, settings);
       
       if (todaysCalculation.problems.length === 0) {
@@ -668,12 +694,12 @@ class ProgressTracker {
       console.log(`  - Unfinished: ${todaysCalculation.unfinished.length}`);
       console.log(`  - New: ${todaysCalculation.newProblems.length}`);
 
-      // Step 4: Get problem details for email
+      // Step 5: Get problem details for email
       const problemDetails = this.getProblemDetails(todaysCalculation.problems);
       const unfinishedDetails = problemDetails.filter(p => todaysCalculation.unfinished.includes(p.slug));
       const newProblemDetails = problemDetails.filter(p => todaysCalculation.newProblems.includes(p.slug));
 
-      // Step 5: Send appropriate email
+      // Step 6: Send appropriate email
       if (problemDetails.length === 1) {
         // Single problem - use original email format
         const problem = problemDetails[0];
@@ -692,7 +718,7 @@ class ProgressTracker {
         });
       }
 
-      // Step 6: Update progress - preserve unsolved problems
+      // Step 7: Update progress - preserve unsolved problems
       const unsolvedProblems = progress.sentProblems.filter(p => !p.solved);
       const newSentProblems = todaysCalculation.problems.map(slug => {
         // Check if this problem was previously unsolved
