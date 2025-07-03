@@ -250,43 +250,114 @@ class LeetCodeAPI {
   }
 
   /**
+   * Get all submissions with pagination
+   */
+  async getAllSubmissions(username, startDate) {
+    console.log(`\n🔄 Fetching ALL submissions since ${startDate}...`);
+    let allSubmissions = [];
+    let offset = 0;
+    const limit = 100; // Maximum allowed by API
+    let hasMore = true;
+
+    while (hasMore) {
+      try {
+        console.log(`\n📑 Fetching page ${offset/limit + 1} (offset: ${offset}, limit: ${limit})`);
+        const response = await axios.get(
+          `${this.baseURL}/${username}/acSubmission?offset=${offset}&limit=${limit}`,
+          { timeout: this.timeout }
+        );
+
+        const submissions = response.data.submission || [];
+        console.log(`✅ Retrieved ${submissions.length} submissions`);
+
+        if (submissions.length > 0) {
+          // Log first and last submission timestamps in this batch
+          const first = new Date(parseInt(submissions[0].timestamp) * 1000);
+          const last = new Date(parseInt(submissions[submissions.length - 1].timestamp) * 1000);
+          console.log(`   Range: ${first.toISOString()} -> ${last.toISOString()}`);
+
+          // Check if we've gone past our start date
+          const oldestTimestamp = parseInt(submissions[submissions.length - 1].timestamp) * 1000;
+          const startTimestamp = new Date(startDate).getTime();
+          if (oldestTimestamp < startTimestamp) {
+            console.log(`🎯 Reached submissions older than target date, stopping pagination`);
+            hasMore = false;
+          }
+        }
+
+        allSubmissions = allSubmissions.concat(submissions);
+        
+        // If we got fewer results than limit, we've reached the end
+        if (submissions.length < limit) {
+          console.log(`📌 Reached end of submissions (got ${submissions.length} < ${limit})`);
+          hasMore = false;
+        } else {
+          offset += limit;
+          // Add a small delay between requests
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching submissions page:`, error.message);
+        hasMore = false; // Stop on error
+      }
+    }
+
+    console.log(`\n📊 Total submissions fetched: ${allSubmissions.length}`);
+    return {
+      count: allSubmissions.length,
+      submission: allSubmissions
+    };
+  }
+
+  /**
    * Get submissions for a specific date
    */
   async getSubmissionsForDate(username, targetDate) {
     try {
-      const submissions = await this.getUserSubmissions(username, 100);
-      
-      if (!submissions.submission || !Array.isArray(submissions.submission)) {
-        console.log('⚠️ Invalid API response structure for date submissions');
+      // Try to get submissions with date parameter
+      console.log(`\n🔍 Fetching submissions for ${targetDate}...`);
+      const response = await axios.get(
+        `${this.baseURL}/${username}/acSubmission?date=${targetDate}&limit=100`,
+        { timeout: this.timeout }
+      );
+
+      if (!response.data.submission || !Array.isArray(response.data.submission)) {
+        console.log('⚠️ Invalid API response structure');
         return [];
       }
-      
-      // Robust date filter: treat a submission as belonging to checkDate if its Unix
-      // timestamp falls between 00:00-00 UTC and 23:59-59 UTC of that date. This is more
-      // reliable than substring comparisons when daylight-offset differences exist.
-      const startTs = Date.parse(`${targetDate}T00:00:00Z`); // start of target day in UTC
-      const endTs   = startTs + 24 * 60 * 60 * 1000;        // exclusive upper bound
 
-      const dateSubmissions = submissions.submission.filter(s => {
-        const tsMs = parseInt(s.timestamp) * 1000;
-        const inWindow  = tsMs >= startTs && tsMs < endTs;
-        const isAccepted = (s.statusDisplay || '').toLowerCase() === 'accepted';
-        return inWindow && isAccepted;
+      console.log(`\n📊 Found ${response.data.submission.length} submissions:`);
+      response.data.submission.forEach(s => {
+        const timestamp = new Date(parseInt(s.timestamp) * 1000);
+        console.log(`\n${s.titleSlug}:`);
+        console.log(`  Status: ${s.statusDisplay}`);
+        console.log(`  UTC: ${timestamp.toISOString()}`);
+        console.log(`  Local: ${timestamp.toLocaleString()}`);
       });
 
-      return dateSubmissions;
+      // Filter accepted submissions
+      const acceptedSubmissions = response.data.submission.filter(s => 
+        (s.statusDisplay || '').toLowerCase() === 'accepted'
+      );
+
+      if (acceptedSubmissions.length > 0) {
+        console.log(`\n✅ Found ${acceptedSubmissions.length} accepted submissions:`);
+        acceptedSubmissions.forEach(s => {
+          const timestamp = new Date(parseInt(s.timestamp) * 1000);
+          console.log(`\n${s.titleSlug}:`);
+          console.log(`  Status: ${s.statusDisplay}`);
+          console.log(`  UTC: ${timestamp.toISOString()}`);
+          console.log(`  Local: ${timestamp.toLocaleString()}`);
+        });
+      } else {
+        console.log('\n❌ No accepted submissions found');
+      }
+
+      return acceptedSubmissions;
     } catch (error) {
-      console.error(`❌ Error fetching submissions for ${targetDate}:`, error.message);
+      console.error('❌ Error:', error.message);
       return [];
     }
-  }
-
-  /**
-   * Get today's submissions for a user (convenience method)
-   */
-  async getTodaysSubmissions(username) {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    return this.getSubmissionsForDate(username, today);
   }
 
   /**
@@ -560,17 +631,9 @@ class ProgressTracker {
       // Load current progress and settings
       const progress = await databaseService.loadProgress();
       const settings = await databaseService.loadSettings();
-      
-      // Use UTC to avoid timezone issues
       const now = new Date();
       const todayStr = format(now, 'yyyy-MM-dd');
-      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
       
-      console.log(`📅 Date calculation: Today=${todayStr}, Yesterday=${yesterdayStr}, Server Time=${now.toISOString()}`);
-      
-      const username = STUDY_PLAN.username;
-
       console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
       console.log(`📅 Last sent: ${progress.lastSentDate}, Today: ${todayStr}`);
 
@@ -581,20 +644,17 @@ class ProgressTracker {
         return;
       }
 
-      // Step 1: Check API health and wake it up if needed
+      // Step 1: Check API health
       console.log('🏥 Checking API health...');
       const apiHealth = await this.leetcodeApi.checkAPIHealth();
-      
       if (!apiHealth.healthy) {
         console.log('⚡ API appears to be sleeping, attempting wake-up...');
         await this.leetcodeApi.wakeUpAPI();
       }
 
-      // Step 2: Check if any problems from yesterday were solved
-      if (progress.lastSentDate === yesterdayStr && progress.sentProblems.length > 0) {
-        console.log('🔍 Checking yesterday\'s submissions...');
-        await this.updateSolvedStatus(progress, yesterdayStr, username);
-      }
+      // Step 2: Check for solved problems
+      console.log('🔍 Checking for solved problems...');
+      await this.updateSolvedStatus(progress, STUDY_PLAN.username);
 
       // Step 3: Calculate what problems to send today
       const todaysCalculation = calculateTodaysProblems(progress, settings);
@@ -671,72 +731,62 @@ class ProgressTracker {
   /**
    * Update solved status for sent problems
    */
-  async updateSolvedStatus(progress, checkDate, username) {
+  async updateSolvedStatus(progress, username) {
     try {
-      console.log(`🔍 Checking submissions for ${username} on ${checkDate}...`);
-      const submissions = await this.leetcodeApi.getUserSubmissions(username, 100);
+      console.log(`🔍 Checking recent submissions for ${username}...`);
+      const submissions = await this.leetcodeApi.getUserSubmissions(username, 20); // 20 is enough for recent submissions
       
-      // Debug: Log API response structure
-      console.log(`📊 API Response structure:`, {
-        hasSubmission: !!submissions.submission,
-        submissionCount: submissions.submission?.length || 0,
-        totalCount: submissions.count || 0
-      });
-
       if (!submissions.submission || !Array.isArray(submissions.submission)) {
-        console.log('⚠️ Invalid API response structure - no submissions array found');
+        console.log('⚠️ Invalid API response structure');
         return;
       }
-      
-      // Robust date filter: treat a submission as belonging to checkDate if its Unix
-      // timestamp falls between 00:00-00 UTC and 23:59-59 UTC of that date. This is more
-      // reliable than substring comparisons when daylight-offset differences exist.
-      const startTs = Date.parse(`${checkDate}T00:00:00Z`); // start of target day in UTC
-      const endTs   = startTs + 24 * 60 * 60 * 1000;        // exclusive upper bound
 
-      const dateSubmissions = submissions.submission.filter(s => {
-        const tsMs = parseInt(s.timestamp) * 1000;
-        const inWindow  = tsMs >= startTs && tsMs < endTs;
-        const isAccepted = (s.statusDisplay || '').toLowerCase() === 'accepted';
-        return inWindow && isAccepted;
+      // Only look at accepted submissions and convert timestamps
+      const acceptedSubmissions = submissions.submission
+        .filter(s => (s.statusDisplay || '').toLowerCase() === 'accepted')
+        .map(s => ({
+          slug: s.titleSlug,
+          timestamp: new Date(parseInt(s.timestamp) * 1000)
+        }));
+
+      console.log(`📝 Found ${acceptedSubmissions.length} recent accepted submissions:`);
+      acceptedSubmissions.forEach(sub => {
+        console.log(`   ${sub.slug} at ${sub.timestamp.toLocaleString()}`);
       });
 
-      console.log(`📊 Found ${dateSubmissions.length} total submissions from ${checkDate}`);
-      
-      // Debug: Show what problems we're looking for
-      const problemSlugs = progress.sentProblems.map(p => p.slug);
-      console.log(`🔍 Looking for these problem slugs: [${problemSlugs.join(', ')}]`);
-      
-      // Debug: Show what submissions we found
-      if (dateSubmissions.length > 0) {
-        const foundSlugs = dateSubmissions.map(s => s.titleSlug);
-        console.log(`📋 Found submissions for slugs: [${foundSlugs.join(', ')}]`);
-      }
-
-      // Update solved status for each sent problem
+      // Update solved status for each unsolved sent problem
       let solvedCount = 0;
       progress.sentProblems.forEach(sentProblem => {
         if (sentProblem.solved) {
-          console.log(`⏭️ ${sentProblem.slug} already marked as solved`);
+          console.log(`\n⏭️ ${sentProblem.slug} already marked as solved`);
           return;
         }
 
-        const wasSolved = dateSubmissions.some(sub => sub.titleSlug === sentProblem.slug);
-        if (wasSolved) {
+        // Get assignment time
+        const assignmentTime = new Date(sentProblem.sentDate);
+        console.log(`\n🔍 Checking ${sentProblem.slug}:`);
+        console.log(`   Assigned: ${assignmentTime.toLocaleString()}`);
+
+        // Look for an accepted submission after assignment
+        const matchingSubmission = acceptedSubmissions.find(sub => 
+          sub.slug === sentProblem.slug && sub.timestamp > assignmentTime
+        );
+
+        if (matchingSubmission) {
           sentProblem.solved = true;
-          sentProblem.solvedDate = checkDate;
+          sentProblem.solvedTimestamp = matchingSubmission.timestamp.toISOString();
           solvedCount++;
-          console.log(`✅ Marked ${sentProblem.slug} as solved on ${checkDate}`);
+          console.log(`✅ Solved at ${matchingSubmission.timestamp.toLocaleString()}`);
         } else {
-          console.log(`❌ ${sentProblem.slug} not found in ${checkDate} submissions`);
+          console.log(`❌ No accepted submissions since assignment`);
         }
       });
 
       if (solvedCount > 0) {
         await databaseService.saveProgress(progress);
-        console.log(`🎉 Updated ${solvedCount} problems as solved and saved to Firebase!`);
+        console.log(`\n🎉 Updated ${solvedCount} problems as solved!`);
       } else {
-        console.log(`📝 No new problems marked as solved for ${checkDate}`);
+        console.log('\n📝 No new problems marked as solved');
       }
 
     } catch (error) {
@@ -745,17 +795,6 @@ class ProgressTracker {
         console.error('API Response Status:', error.response.status);
         console.error('API Response Data:', error.response.data);
       }
-      
-      console.log('⚠️ API unavailable - using conservative approach');
-      console.log('💡 This means unsolved problems will be resent tomorrow');
-      console.log('💡 If you solved problems yesterday, they\'ll be detected when API is back');
-      
-      // Mark all problems as unsolved since we can't verify
-      progress.sentProblems.forEach(sentProblem => {
-        if (!sentProblem.solved) {
-          console.log(`⏳ ${sentProblem.slug} - status unknown (assuming unsolved)`);
-        }
-      });
     }
   }
 
@@ -1072,4 +1111,4 @@ if (require.main === module) {
   main().catch(console.error);
 }
 
-module.exports = { ProgressTracker, LeetCodeAPI, EmailService }; 
+module.exports = { ProgressTracker, LeetCodeAPI, EmailService };

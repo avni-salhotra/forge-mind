@@ -28,7 +28,7 @@ const TEST_CONFIG = {
   testUsername: 'avnisalhotra', // Real user account
   testProblemSlug: 'two-sum', // Very common problem
   testProblemTitle: 'Two Sum',
-  timeout: 10000 // 10 second timeout
+  timeout: 30000 // Increased to 30 seconds for Render's free tier
 };
 
 /**
@@ -320,18 +320,42 @@ async function checkSubmissionOnDate({ username, slug, date }) {
     const startTs = Date.parse(`${date}T00:00:00Z`);
     const endTs   = startTs + 24 * 60 * 60 * 1000;
 
+    console.log('\n🕒 Timestamp debug:');
+    console.log(`Target date window (UTC): ${new Date(startTs).toISOString()} -> ${new Date(endTs).toISOString()}`);
+
+    // Debug first few submissions
+    console.log('\n📝 First 5 submissions received:');
+    submissions.slice(0, 5).forEach(s => {
+      const tsMs = Number(s.timestamp) * 1000;
+      const date = new Date(tsMs).toISOString();
+      console.log(`- ${s.titleSlug} (${s.statusDisplay}): ${date}`);
+    });
+
     const hits = submissions.filter(s => {
       const tsMs = Number(s.timestamp) * 1000;
       const inWindow = tsMs >= startTs && tsMs < endTs;
       const isAccepted = (s.statusDisplay || '').toLowerCase() === 'accepted';
       const slugMatch  = s.titleSlug === slug;
+
+      // Debug match criteria
+      if (slugMatch) {
+        console.log(`\n🎯 Found submission for ${slug}:`);
+        console.log(`Time: ${new Date(tsMs).toISOString()}`);
+        console.log(`In window: ${inWindow}`);
+        console.log(`Status: ${s.statusDisplay} (accepted: ${isAccepted})`);
+      }
+
       return inWindow && isAccepted && slugMatch;
     });
 
     if (hits.length > 0) {
-      console.log(`🎉 FOUND! ${slug} was accepted ${hits.length} time(s) on ${date}.`);
+      console.log(`\n🎉 FOUND! ${slug} was accepted ${hits.length} time(s) on ${date}.`);
+      hits.forEach(h => {
+        const tsMs = Number(h.timestamp) * 1000;
+        console.log(`- Accepted at: ${new Date(tsMs).toISOString()}`);
+      });
     } else {
-      console.log(`❌ Not found. Either the submission isn't within the latest ${limit} accepted entries, or it wasn't accepted on ${date}.`);
+      console.log(`\n❌ Not found. Either the submission isn't within the latest ${limit} accepted entries, or it wasn't accepted on ${date}.`);
     }
   } catch (err) {
     console.error(`💥 Failed to query submissions: ${err.message}`);
