@@ -12,10 +12,14 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const crypto = require('crypto');
 
 // Import our tracker modules
 const { ProgressTracker, LeetCodeAPI, EmailService } = require('./tracker');
 const { StudyPlanHelper } = require('./study-plan');
+
+// Import version from package.json
+const { version } = require('./package.json');
 
 // Import Firebase database service
 const { databaseService, DEFAULT_SETTINGS, DEFAULT_PROGRESS } = require('./lib/firebase');
@@ -23,11 +27,42 @@ const { databaseService, DEFAULT_SETTINGS, DEFAULT_PROGRESS } = require('./lib/f
 // Import system design email sender
 const { sendSystemDesignEmail } = require('./send-system-design');
 
+// Utility functions
 function validateNumQuestions(num) {
   const parsed = parseInt(num);
   if (isNaN(parsed) || parsed < 1) return 1;
   if (parsed > 10) return 10;
   return parsed;
+}
+
+function safeCompare(a, b) {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  return aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function captureConsole() {
+  const originalLog = console.log;
+  const originalErr = console.error;
+  const output = [];
+
+  console.log = (...args) => {
+    output.push(args.join(' '));
+    originalLog(...args);
+  };
+  
+  console.error = (...args) => {
+    output.push(`ERROR: ${args.join(' ')}`);
+    originalErr(...args);
+  };
+
+  return {
+    output,
+    restore: () => {
+      console.log = originalLog;
+      console.error = originalErr;
+    }
+  };
 }
 
 // Create Express app
@@ -116,11 +151,15 @@ app.get('/api/status', async (req, res) => {
       }
     });
     
+    const position = progress.studyPlanPosition;
+    const inBounds = position >= 0 && position < orderedProblems.length;
+    
     const status = {
       totalProblems: orderedProblems.length,
       problemDetails: problemDetails,
-      currentTopic: orderedProblems[progress.studyPlanPosition]?.topicIndex || 0,
-      completionPercentage: Math.round((progress.studyPlanPosition / orderedProblems.length) * 100)
+      currentTopic: inBounds ? orderedProblems[position].topicIndex : null,
+      completionPercentage: orderedProblems.length > 0 ? Math.round((progress.studyPlanPosition / orderedProblems.length) * 100) : 0,
+      progressState: inBounds ? 'in_progress' : 'completed'
     };
     
     res.json(status);
@@ -135,43 +174,25 @@ app.post('/api/test', async (req, res) => {
   try {
     console.log('🧪 Running tracker test via API...');
     
-    // Capture console output
-    const originalLog = console.log;
-    const originalError = console.error;
-    let output = [];
-    
-    console.log = (...args) => {
-      output.push(args.join(' '));
-      originalLog(...args);
-    };
-    
-    console.error = (...args) => {
-      output.push(`ERROR: ${args.join(' ')}`);
-      originalError(...args);
-    };
+    const capture = captureConsole();
     
     try {
       await tracker.testTracker();
-      
-      // Restore console
-      console.log = originalLog;
-      console.error = originalError;
+      capture.restore();
       
       res.json({
         success: true,
         message: 'Test completed successfully',
-        output: output.slice(-10) // Last 10 lines
+        output: capture.output.slice(-10) // Last 10 lines
       });
       
     } catch (testError) {
-      // Restore console
-      console.log = originalLog;
-      console.error = originalError;
+      capture.restore();
       
       res.json({
         success: false,
         message: testError.message,
-        output: output.slice(-10)
+        output: capture.output.slice(-10)
       });
     }
     
@@ -186,43 +207,25 @@ app.post('/api/check', async (req, res) => {
   try {
     console.log('⚡ Running daily check via API...');
     
-    // Capture console output
-    const originalLog = console.log;
-    const originalError = console.error;
-    let output = [];
-    
-    console.log = (...args) => {
-      output.push(args.join(' '));
-      originalLog(...args);
-    };
-    
-    console.error = (...args) => {
-      output.push(`ERROR: ${args.join(' ')}`);
-      originalError(...args);
-    };
+    const capture = captureConsole();
     
     try {
       await tracker.runDailyRoutine();
-      
-      // Restore console
-      console.log = originalLog;
-      console.error = originalError;
+      capture.restore();
       
       res.json({
         success: true,
         message: 'Daily check completed successfully',
-        output: output.slice(-10)
+        output: capture.output.slice(-10)
       });
       
     } catch (checkError) {
-      // Restore console
-      console.log = originalLog;
-      console.error = originalError;
+      capture.restore();
       
       res.json({
         success: false,
         message: checkError.message,
-        output: output.slice(-10)
+        output: capture.output.slice(-10)
       });
     }
     
@@ -239,29 +242,11 @@ app.post('/api/daily-routine', async (req, res) => {
     
     const startTime = Date.now();
     
-    // Capture console output
-    const originalLog = console.log;
-    const originalError = console.error;
-    let output = [];
-    
-    console.log = (...args) => {
-      const message = args.join(' ');
-      output.push(message);
-      originalLog(...args);
-    };
-    
-    console.error = (...args) => {
-      const message = `ERROR: ${args.join(' ')}`;
-      output.push(message);
-      originalError(...args);
-    };
+    const capture = captureConsole();
     
     try {
       await tracker.runDailyRoutine();
-      
-      // Restore console
-      console.log = originalLog;
-      console.error = originalError;
+      capture.restore();
       
       const duration = Date.now() - startTime;
       
@@ -271,13 +256,11 @@ app.post('/api/daily-routine', async (req, res) => {
         timestamp: new Date().toISOString(),
         duration: `${duration}ms`,
         triggered_by: 'github_actions',
-        output: output.slice(-15) // Last 15 lines for debugging
+        output: capture.output.slice(-15) // Last 15 lines for debugging
       });
       
     } catch (routineError) {
-      // Restore console
-      console.log = originalLog;
-      console.error = originalError;
+      capture.restore();
       
       const duration = Date.now() - startTime;
       
@@ -287,7 +270,7 @@ app.post('/api/daily-routine', async (req, res) => {
         timestamp: new Date().toISOString(),
         duration: `${duration}ms`,
         triggered_by: 'github_actions',
-        output: output.slice(-15)
+        output: capture.output.slice(-15)
       });
     }
     
@@ -308,8 +291,8 @@ app.post('/api/system-design/send', async (req, res) => {
     const authHeader = req.headers.authorization || '';
     const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
     
-    // More robust security check
-    if (!authHeader || authHeader.toLowerCase() !== expectedAuth.toLowerCase()) {
+    // Timing-safe comparison to prevent auth bypass
+    if (!authHeader || !safeCompare(authHeader, expectedAuth)) {
       console.log('❌ Unauthorized attempt to send system design email');
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -342,16 +325,15 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    version: '2.0.0-multi-problem',
+    version: version,
     uptime: process.uptime(),
-    memory: process.memoryUsage()
+    memoryMB: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)
   });
 });
 
 // Auto-start cron jobs in production
 if (process.env.NODE_ENV === 'production') {
   console.log('🔄 Starting background cron jobs for production...');
-  const tracker = new ProgressTracker();
   tracker.startScheduledJobs();
 }
 

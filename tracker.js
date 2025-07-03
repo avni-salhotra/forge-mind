@@ -175,48 +175,143 @@ class LeetCodeAPI {
   }
 
   /**
-   * Get user's recent submissions
+   * Get user's recent submissions with retry logic
    */
   async getUserSubmissions(username, limit = 20) {
-    try {
-      const response = await axios.get(
-        `${this.baseURL}/${username}/acSubmission?limit=${limit}`,
-        { timeout: this.timeout }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('❌ Error fetching user submissions:', error.message);
-      throw error;
+    const maxRetries = 3;
+    const baseTimeout = 15000; // Start with 15 seconds
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const timeout = baseTimeout * attempt; // Exponential timeout increase
+        console.log(`🔄 API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
+        
+        const response = await axios.get(
+          `${this.baseURL}/${username}/acSubmission?limit=${limit}`,
+          { timeout }
+        );
+        
+        console.log(`✅ API call successful on attempt ${attempt}`);
+        return response.data;
+        
+      } catch (error) {
+        console.log(`⚠️ API attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt === maxRetries) {
+          console.error('❌ All API attempts failed - using fallback behavior');
+          // Return empty but valid structure to prevent crashes
+          return {
+            count: 0,
+            submission: []
+          };
+        }
+        
+        // Wait before retry (with exponential backoff)
+        const waitTime = 2000 * attempt;
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
   }
 
   /**
-   * Get user profile data
+   * Get user profile data with retry logic
    */
   async getUserProfile(username) {
-    try {
-      const response = await axios.get(
-        `${this.baseURL}/${username}`,
-        { timeout: this.timeout }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('❌ Error fetching user profile:', error.message);
-      throw error;
+    const maxRetries = 3;
+    const baseTimeout = 15000;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const timeout = baseTimeout * attempt;
+        console.log(`🔄 Profile API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
+        
+        const response = await axios.get(
+          `${this.baseURL}/${username}`,
+          { timeout }
+        );
+        
+        console.log(`✅ Profile API successful on attempt ${attempt}`);
+        return response.data;
+        
+      } catch (error) {
+        console.log(`⚠️ Profile API attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt === maxRetries) {
+          console.error('❌ Profile API failed - continuing with limited functionality');
+          throw error;
+        }
+        
+        const waitTime = 2000 * attempt;
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
   }
 
   /**
-   * Get today's submissions for a user
+   * Get submissions for a specific date
+   */
+  async getSubmissionsForDate(username, targetDate) {
+    try {
+      const submissions = await this.getUserSubmissions(username, 100);
+      
+      if (!submissions.submission || !Array.isArray(submissions.submission)) {
+        console.log('⚠️ Invalid API response structure for date submissions');
+        return [];
+      }
+      
+      return submissions.submission.filter(sub => {
+        const submissionDate = format(new Date(parseInt(sub.timestamp) * 1000), 'yyyy-MM-dd');
+        return submissionDate === targetDate && sub.statusDisplay === 'Accepted';
+      });
+    } catch (error) {
+      console.error(`❌ Error fetching submissions for ${targetDate}:`, error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get today's submissions for a user (convenience method)
    */
   async getTodaysSubmissions(username) {
-    const submissions = await this.getUserSubmissions(username, 50);
-    const today = startOfDay(new Date());
-    
-    return submissions.submission.filter(sub => {
-      const submissionDate = startOfDay(new Date(parseInt(sub.timestamp) * 1000));
-      return submissionDate.getTime() === today.getTime();
-    });
+    const today = format(new Date(), 'yyyy-MM-dd');
+    return this.getSubmissionsForDate(username, today);
+  }
+
+  /**
+   * Wake up the API (useful for cold starts on Render/Heroku)
+   */
+  async wakeUpAPI() {
+    console.log('🌅 Waking up external API...');
+    try {
+      const response = await axios.get(`${this.baseURL}/daily`, { 
+        timeout: 30000 // Give it plenty of time for cold start
+      });
+      console.log('✅ API is awake and responsive');
+      return true;
+    } catch (error) {
+      console.log(`⚠️ API wake-up failed: ${error.message}`);
+      console.log('💡 This might slow down subsequent API calls');
+      return false;
+    }
+  }
+
+  /**
+   * Check API health
+   */
+  async checkAPIHealth() {
+    try {
+      const start = Date.now();
+      const response = await axios.get(`${this.baseURL}/daily`, { timeout: 5000 });
+      const duration = Date.now() - start;
+      
+      console.log(`✅ API Health: OK (${duration}ms response time)`);
+      return { healthy: true, responseTime: duration };
+    } catch (error) {
+      console.log(`❌ API Health: POOR (${error.message})`);
+      return { healthy: false, error: error.message };
+    }
   }
 }
 
@@ -456,21 +551,42 @@ class ProgressTracker {
       const progress = await databaseService.loadProgress();
       const settings = await databaseService.loadSettings();
       
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const yesterdayStr = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
+      // Use UTC to avoid timezone issues
+      const now = new Date();
+      const todayStr = format(now, 'yyyy-MM-dd');
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+      
+      console.log(`📅 Date calculation: Today=${todayStr}, Yesterday=${yesterdayStr}, Server Time=${now.toISOString()}`);
       
       const username = STUDY_PLAN.username;
 
       console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
       console.log(`📅 Last sent: ${progress.lastSentDate}, Today: ${todayStr}`);
 
-      // Step 1: Check if any problems from yesterday were solved
+      // Check if we already sent problems today
+      if (progress.lastSentDate === todayStr) {
+        console.log('⏭️ Problems already sent today. Skipping daily routine.');
+        console.log(`📝 Today's problems: [${progress.sentProblems.map(p => p.slug).join(', ')}]`);
+        return;
+      }
+
+      // Step 1: Check API health and wake it up if needed
+      console.log('🏥 Checking API health...');
+      const apiHealth = await this.leetcodeApi.checkAPIHealth();
+      
+      if (!apiHealth.healthy) {
+        console.log('⚡ API appears to be sleeping, attempting wake-up...');
+        await this.leetcodeApi.wakeUpAPI();
+      }
+
+      // Step 2: Check if any problems from yesterday were solved
       if (progress.lastSentDate === yesterdayStr && progress.sentProblems.length > 0) {
         console.log('🔍 Checking yesterday\'s submissions...');
         await this.updateSolvedStatus(progress, yesterdayStr, username);
       }
 
-      // Step 2: Calculate what problems to send today
+      // Step 3: Calculate what problems to send today
       const todaysCalculation = calculateTodaysProblems(progress, settings);
       
       if (todaysCalculation.problems.length === 0) {
@@ -482,12 +598,12 @@ class ProgressTracker {
       console.log(`  - Unfinished: ${todaysCalculation.unfinished.length}`);
       console.log(`  - New: ${todaysCalculation.newProblems.length}`);
 
-      // Step 3: Get problem details for email
+      // Step 4: Get problem details for email
       const problemDetails = this.getProblemDetails(todaysCalculation.problems);
       const unfinishedDetails = problemDetails.filter(p => todaysCalculation.unfinished.includes(p.slug));
       const newProblemDetails = problemDetails.filter(p => todaysCalculation.newProblems.includes(p.slug));
 
-      // Step 4: Send appropriate email
+      // Step 5: Send appropriate email
       if (problemDetails.length === 1) {
         // Single problem - use original email format
         const problem = problemDetails[0];
@@ -506,7 +622,7 @@ class ProgressTracker {
         });
       }
 
-      // Step 5: Update progress - preserve unsolved problems
+      // Step 6: Update progress - preserve unsolved problems
       const unsolvedProblems = progress.sentProblems.filter(p => !p.solved);
       const newSentProblems = todaysCalculation.problems.map(slug => {
         // Check if this problem was previously unsolved
@@ -547,35 +663,84 @@ class ProgressTracker {
    */
   async updateSolvedStatus(progress, checkDate, username) {
     try {
+      console.log(`🔍 Checking submissions for ${username} on ${checkDate}...`);
       const submissions = await this.leetcodeApi.getUserSubmissions(username, 100);
       
-      // Filter submissions from the check date
-      const dateSubmissions = submissions.submission.filter(s => {
-        const submissionDate = format(new Date(parseInt(s.timestamp) * 1000), 'yyyy-MM-dd');
-        return submissionDate === checkDate;
+      // Debug: Log API response structure
+      console.log(`📊 API Response structure:`, {
+        hasSubmission: !!submissions.submission,
+        submissionCount: submissions.submission?.length || 0,
+        totalCount: submissions.count || 0
       });
 
-      console.log(`📊 Found ${dateSubmissions.length} submissions from ${checkDate}`);
+      if (!submissions.submission || !Array.isArray(submissions.submission)) {
+        console.log('⚠️ Invalid API response structure - no submissions array found');
+        return;
+      }
+      
+      // Filter submissions from the check date with enhanced debugging (only accepted submissions)
+      const dateSubmissions = submissions.submission.filter(s => {
+        const submissionDate = format(new Date(parseInt(s.timestamp) * 1000), 'yyyy-MM-dd');
+        const isCorrectDate = submissionDate === checkDate;
+        const isAccepted = s.statusDisplay === 'Accepted';
+        return isCorrectDate && isAccepted;
+      });
+
+      console.log(`📊 Found ${dateSubmissions.length} total submissions from ${checkDate}`);
+      
+      // Debug: Show what problems we're looking for
+      const problemSlugs = progress.sentProblems.map(p => p.slug);
+      console.log(`🔍 Looking for these problem slugs: [${problemSlugs.join(', ')}]`);
+      
+      // Debug: Show what submissions we found
+      if (dateSubmissions.length > 0) {
+        const foundSlugs = dateSubmissions.map(s => s.titleSlug);
+        console.log(`📋 Found submissions for slugs: [${foundSlugs.join(', ')}]`);
+      }
 
       // Update solved status for each sent problem
       let solvedCount = 0;
       progress.sentProblems.forEach(sentProblem => {
+        if (sentProblem.solved) {
+          console.log(`⏭️ ${sentProblem.slug} already marked as solved`);
+          return;
+        }
+
         const wasSolved = dateSubmissions.some(sub => sub.titleSlug === sentProblem.slug);
-        if (wasSolved && !sentProblem.solved) {
+        if (wasSolved) {
           sentProblem.solved = true;
+          sentProblem.solvedDate = checkDate;
           solvedCount++;
-          console.log(`✅ Marked ${sentProblem.slug} as solved`);
+          console.log(`✅ Marked ${sentProblem.slug} as solved on ${checkDate}`);
+        } else {
+          console.log(`❌ ${sentProblem.slug} not found in ${checkDate} submissions`);
         }
       });
 
       if (solvedCount > 0) {
         await databaseService.saveProgress(progress);
-        console.log(`🎉 Updated ${solvedCount} problems as solved!`);
+        console.log(`🎉 Updated ${solvedCount} problems as solved and saved to Firebase!`);
+      } else {
+        console.log(`📝 No new problems marked as solved for ${checkDate}`);
       }
 
     } catch (error) {
       console.error('❌ Error checking submissions:', error.message);
-      console.log('⚠️ Continuing with conservative assumption (unsolved)');
+      if (error.response) {
+        console.error('API Response Status:', error.response.status);
+        console.error('API Response Data:', error.response.data);
+      }
+      
+      console.log('⚠️ API unavailable - using conservative approach');
+      console.log('💡 This means unsolved problems will be resent tomorrow');
+      console.log('💡 If you solved problems yesterday, they\'ll be detected when API is back');
+      
+      // Mark all problems as unsolved since we can't verify
+      progress.sentProblems.forEach(sentProblem => {
+        if (!sentProblem.solved) {
+          console.log(`⏳ ${sentProblem.slug} - status unknown (assuming unsolved)`);
+        }
+      });
     }
   }
 
@@ -649,9 +814,28 @@ class ProgressTracker {
       console.log(`   - New: ${todaysCalculation.newProblems.length}`);
       console.log(`   - Updated position: ${todaysCalculation.updatedPosition}\n`);
 
+      // Test submission checking
+      console.log('6. Testing submission checking...');
+      const yesterdayStr = format(new Date(Date.now() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      
+      try {
+        const yesterdaySubmissions = await this.leetcodeApi.getSubmissionsForDate(STUDY_PLAN.username, yesterdayStr);
+        const todaySubmissions = await this.leetcodeApi.getSubmissionsForDate(STUDY_PLAN.username, todayStr);
+        
+        console.log(`✅ Yesterday (${yesterdayStr}): ${yesterdaySubmissions.length} accepted submissions`);
+        console.log(`✅ Today (${todayStr}): ${todaySubmissions.length} accepted submissions`);
+        
+        if (yesterdaySubmissions.length > 0) {
+          console.log(`   Yesterday's problems: [${yesterdaySubmissions.map(s => s.titleSlug).join(', ')}]`);
+        }
+      } catch (error) {
+        console.log(`❌ Submission checking failed: ${error.message}`);
+      }
+
       // Test email (optional)
       if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        console.log('6. Testing email (sending test email)...');
+        console.log('7. Testing email (sending test email)...');
         await this.emailService.sendEmail(
           '🧪 LeetCode Tracker Test - Multi-problem Support',
           '<h2>🎉 Test email successful!</h2><p>Your LeetCode tracker with multi-problem support is working!</p>',
@@ -659,7 +843,7 @@ class ProgressTracker {
         );
         console.log('✅ Email test successful!\n');
       } else {
-        console.log('6. ⚠️ Email not configured (set EMAIL_USER and EMAIL_PASS in .env)\n');
+        console.log('7. ⚠️ Email not configured (set EMAIL_USER and EMAIL_PASS in .env)\n');
       }
 
       console.log('🎉 All tests passed! Multi-problem tracker is ready to use.\n');
@@ -714,6 +898,41 @@ async function main() {
     case 'status':
       await showStatus();
       break;
+
+    case 'diagnose':
+      const DiagnosticTool = require('./diagnose-progress');
+      const diagnostic = new DiagnosticTool();
+      await diagnostic.run();
+      break;
+
+    case 'wake':
+      console.log('🌅 Waking up external API...');
+      const api = new LeetCodeAPI();
+      await api.wakeUpAPI();
+      const health = await api.checkAPIHealth();
+      if (health.healthy) {
+        console.log('✅ API is ready for use!');
+      } else {
+        console.log('⚠️ API may still be starting up. Wait a few minutes and try again.');
+      }
+      break;
+
+    case 'force-check':
+      console.log('🔧 Force checking submissions and updating progress...');
+      const forceTracker = new ProgressTracker();
+      const forceProgress = await databaseService.loadProgress();
+      const forceSettings = await databaseService.loadSettings();
+      const yesterdayStr = format(new Date(Date.now() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+      
+      console.log(`🔍 Force checking ${yesterdayStr} submissions...`);
+      await forceTracker.updateSolvedStatus(forceProgress, yesterdayStr, process.env.LEETCODE_USERNAME);
+      
+      console.log('\n📊 Updated progress:');
+      const updatedProgress = await databaseService.loadProgress();
+      updatedProgress.sentProblems.forEach((problem, i) => {
+        console.log(`  ${i + 1}. ${problem.slug} - solved: ${problem.solved} (sent: ${problem.sentDate})`);
+      });
+      break;
     
     default:
       console.log(`
@@ -725,6 +944,9 @@ Usage:
   node tracker.js start                   - Start scheduled monitoring
   node tracker.js settings [get|set]      - Manage settings
   node tracker.js status                  - Show current status
+  node tracker.js diagnose               - Run diagnostic tool to troubleshoot issues
+  node tracker.js wake                    - Wake up external API (fixes timeout issues)
+  node tracker.js force-check            - Force check yesterday's submissions and update progress
 
 Settings Management:
   node tracker.js settings get            - Show current settings
