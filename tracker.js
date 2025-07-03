@@ -262,8 +262,10 @@ class LeetCodeAPI {
       }
       
       return submissions.submission.filter(sub => {
-        const submissionDate = format(new Date(parseInt(sub.timestamp) * 1000), 'yyyy-MM-dd');
-        return submissionDate === targetDate && sub.statusDisplay === 'Accepted';
+        const submissionDateUTC = new Date(parseInt(sub.timestamp) * 1000)
+          .toISOString()
+          .substring(0, 10);
+        return submissionDateUTC === targetDate && (sub.statusDisplay || '').toLowerCase() === 'accepted';
       });
     } catch (error) {
       console.error(`❌ Error fetching submissions for ${targetDate}:`, error.message);
@@ -678,11 +680,14 @@ class ProgressTracker {
         return;
       }
       
-      // Filter submissions from the check date with enhanced debugging (only accepted submissions)
+      // Use UTC date string to avoid timezone mismatch between server and LeetCode timestamps
       const dateSubmissions = submissions.submission.filter(s => {
-        const submissionDate = format(new Date(parseInt(s.timestamp) * 1000), 'yyyy-MM-dd');
-        const isCorrectDate = submissionDate === checkDate;
-        const isAccepted = s.statusDisplay === 'Accepted';
+        const submissionDateUTC = new Date(parseInt(s.timestamp) * 1000)
+          .toISOString()
+          .substring(0, 10); // YYYY-MM-DD in UTC
+
+        const isCorrectDate = submissionDateUTC === checkDate;
+        const isAccepted = (s.statusDisplay || '').toLowerCase() === 'accepted';
         return isCorrectDate && isAccepted;
       });
 
