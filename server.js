@@ -221,30 +221,63 @@ app.post('/api/check', async (req, res) => {
     console.log('⚡ Running daily check via API...');
     
     const capture = captureConsole();
+    const startTime = Date.now();
     
     try {
       await tracker.runDailyRoutine();
       capture.restore();
       
+      const duration = Date.now() - startTime;
+      
       res.json({
         success: true,
         message: 'Daily check completed successfully',
-        output: capture.importantOutput.slice(-3) // Only return last 3 important messages
+        duration: `${duration}ms`,
+        output: capture.importantOutput.slice(-3),
+        coldStart: {
+          duration,
+          status: 'completed'
+        }
       });
       
-    } catch (checkError) {
+    } catch (routineError) {
       capture.restore();
+      const duration = Date.now() - startTime;
+      
+      // Extract circuit breaker info if present
+      const circuitBreakerActive = capture.output.some(msg => 
+        msg.includes('Circuit breaker is active') || 
+        msg.includes('Circuit breaker tripped')
+      );
+
+      // Check if it's a cold start issue
+      const isColdStart = capture.output.some(msg => 
+        msg.includes('API appears to be sleeping') || 
+        msg.includes('starting wake-up process')
+      );
       
       res.json({
         success: false,
-        message: checkError.message,
-        output: capture.importantOutput.slice(-3) // Only return last 3 important messages on error
+        message: routineError.message,
+        duration: `${duration}ms`,
+        output: capture.importantOutput.slice(-3),
+        coldStart: {
+          inProgress: isColdStart,
+          duration,
+          circuitBreakerActive,
+          status: circuitBreakerActive ? 'circuit_breaker' : 
+                 isColdStart ? 'waking_up' : 'error'
+        }
       });
     }
     
   } catch (error) {
     console.error('Error running daily check:', error);
-    res.status(500).json({ error: 'Failed to run daily check' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to run daily check',
+      message: error.message
+    });
   }
 });
 

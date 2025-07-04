@@ -172,6 +172,12 @@ class LeetCodeAPI {
   constructor() {
     this.baseURL = TRACKER_CONFIG.api.baseUrl;
     this.timeout = TRACKER_CONFIG.api.timeout;
+    this.maxRetryAttempts = 12; // Allow for up to 10 minutes of retry
+    this.initialRetryDelay = 30000; // Start with 30s delay
+    this.maxRetryDelay = 120000; // Cap at 2 minutes per attempt
+    this.circuitBreakerFailureCount = 0;
+    this.circuitBreakerResetTimeout = 600000; // 10 minutes
+    this.lastCircuitBreakerTrip = null;
   }
 
   /**
@@ -364,18 +370,53 @@ class LeetCodeAPI {
    * Wake up the API (useful for cold starts on Render/Heroku)
    */
   async wakeUpAPI() {
-    console.log('🌅 Waking up external API...');
-    try {
-      const response = await axios.get(`${this.baseURL}/daily`, { 
-        timeout: 30000 // Give it plenty of time for cold start
-      });
-      console.log('✅ API is awake and responsive');
-      return true;
-    } catch (error) {
-      console.log(`⚠️ API wake-up failed: ${error.message}`);
-      console.log('💡 This might slow down subsequent API calls');
-      return false;
+    console.log('🌅 Starting API wake-up process...');
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= this.maxRetryAttempts; attempt++) {
+      // Check circuit breaker
+      if (this.isCircuitBreakerTripped()) {
+        console.log('🔌 Circuit breaker activated - stopping wake-up attempts');
+        return false;
+      }
+
+      try {
+        // Calculate delay with exponential backoff (capped)
+        const delay = Math.min(
+          this.initialRetryDelay * Math.pow(1.5, attempt - 1),
+          this.maxRetryDelay
+        );
+
+        console.log(`\n🔄 Wake-up attempt ${attempt}/${this.maxRetryAttempts}`);
+        console.log(`⏳ Timeout set to ${delay/1000}s`);
+        
+        const response = await axios.get(`${this.baseURL}/daily`, { timeout: delay });
+        
+        console.log('✅ API is awake and responsive!');
+        this.circuitBreakerFailureCount = 0; // Reset on success
+        return true;
+
+      } catch (error) {
+        lastError = error;
+        console.log(`⚠️ Attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt < this.maxRetryAttempts) {
+          const waitTime = Math.min(
+            this.initialRetryDelay * Math.pow(1.5, attempt - 1),
+            this.maxRetryDelay
+          );
+          
+          console.log(`⏳ Waiting ${waitTime/1000}s before next attempt...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
     }
+
+    // If we get here, all attempts failed
+    this.incrementCircuitBreakerCount();
+    console.log('❌ API wake-up failed after all attempts');
+    console.log('💡 Circuit breaker may activate to prevent further attempts');
+    return false;
   }
 
   /**
@@ -383,15 +424,47 @@ class LeetCodeAPI {
    */
   async checkAPIHealth() {
     try {
+      // Check if circuit breaker is tripped
+      if (this.isCircuitBreakerTripped()) {
+        console.log('🔌 Circuit breaker is active - preventing API calls');
+        return { healthy: false, error: 'Circuit breaker active', circuitBreaker: true };
+      }
+
       const start = Date.now();
-      const response = await axios.get(`${this.baseURL}/daily`, { timeout: 5000 });
+      // Increased initial health check timeout
+      const response = await axios.get(`${this.baseURL}/daily`, { timeout: 30000 });
       const duration = Date.now() - start;
+      
+      // Reset circuit breaker on success
+      this.circuitBreakerFailureCount = 0;
       
       console.log(`✅ API Health: OK (${duration}ms response time)`);
       return { healthy: true, responseTime: duration };
     } catch (error) {
       console.log(`❌ API Health: POOR (${error.message})`);
+      this.incrementCircuitBreakerCount();
       return { healthy: false, error: error.message };
+    }
+  }
+
+  isCircuitBreakerTripped() {
+    // Reset circuit breaker after timeout
+    if (this.lastCircuitBreakerTrip && 
+        Date.now() - this.lastCircuitBreakerTrip >= this.circuitBreakerResetTimeout) {
+      console.log('🔌 Circuit breaker reset after timeout');
+      this.circuitBreakerFailureCount = 0;
+      this.lastCircuitBreakerTrip = null;
+      return false;
+    }
+
+    return this.circuitBreakerFailureCount >= 5;
+  }
+
+  incrementCircuitBreakerCount() {
+    this.circuitBreakerFailureCount++;
+    if (this.circuitBreakerFailureCount >= 5 && !this.lastCircuitBreakerTrip) {
+      this.lastCircuitBreakerTrip = Date.now();
+      console.log('🔌 Circuit breaker tripped - will prevent API calls for 10 minutes');
     }
   }
 }
@@ -628,38 +701,24 @@ class ProgressTracker {
     console.log('\n🕑 Daily routine - Multi-problem support');
     
     try {
-      // Step 1: Check API health and wake it up if needed
+      // Step 1: Check API health with longer initial attempt
       console.log('🏥 Checking LeetCode API health...');
       let apiHealth = await this.leetcodeApi.checkAPIHealth();
       
       if (!apiHealth.healthy) {
-        console.log('⚡ API appears to be sleeping, attempting wake-up...');
-        await this.leetcodeApi.wakeUpAPI();
-        
-        // Wait a bit and verify API is actually responding
-        console.log('⏳ Waiting for API to fully wake up...');
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 5000 * attempt)); // 5s, 10s, 15s waits
-          apiHealth = await this.leetcodeApi.checkAPIHealth();
-          
-          if (apiHealth.healthy) {
-            console.log('✅ API is now awake and responding!');
-            break;
-          }
-          
-          if (attempt === 3) {
-            console.log('❌ API failed to wake up after multiple attempts');
-            console.log('💡 Will try again on next scheduled run');
-            return;
-          }
-          
-          console.log(`⏳ API still waking up, attempt ${attempt}/3...`);
+        if (apiHealth.circuitBreaker) {
+          console.log('🔌 Circuit breaker is active - will retry on next scheduled run');
+          return;
         }
-      }
 
-      // Only proceed if API is healthy
-      if (!apiHealth.healthy) {
-        return;
+        console.log('⚡ API appears to be sleeping, starting wake-up process...');
+        const wakeupSuccess = await this.leetcodeApi.wakeUpAPI();
+        
+        if (!wakeupSuccess) {
+          console.log('❌ API failed to wake up after extended attempts');
+          console.log('💡 Will retry on next scheduled run');
+          return;
+        }
       }
 
       // Step 2: Load progress and settings

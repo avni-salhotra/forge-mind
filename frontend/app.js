@@ -55,10 +55,12 @@ function showAlert(message, type = 'success') {
     alertElement.className = `alert alert-${type}`;
     alertElement.style.display = 'block';
     
-    // Auto-hide after 5 seconds
-    setTimeout(() => {
-        alertElement.style.display = 'none';
-    }, 5000);
+    // Don't auto-hide important messages
+    if (!['info', 'warning'].includes(type)) {
+        setTimeout(() => {
+            alertElement.style.display = 'none';
+        }, 5000);
+    }
 }
 
 function hideAlert() {
@@ -202,18 +204,40 @@ async function testTracker() {
 async function runDailyCheck() {
     try {
         hideAlert();
-        showAlert('Running daily check... This may take a few seconds.', 'success');
+        showAlert('Running daily check... This may take several minutes if the API needs to wake up.', 'success');
         
         const result = await api.post('/check', {});
         
         if (result.success) {
-            // Format the output messages nicely
             const statusMessages = result.output.join('\n');
             showAlert(`✅ Daily check completed!\n\nLatest updates:\n${statusMessages}`, 'success');
-            // Refresh status after daily check
             setTimeout(refreshStatus, 2000);
         } else {
-            showAlert(`Daily check failed: ${result.message}\n\nDetails:\n${result.output.join('\n')}`, 'error');
+            // Handle cold start and circuit breaker states
+            if (result.coldStart) {
+                switch (result.coldStart.status) {
+                    case 'waking_up':
+                        showAlert(
+                            `The API is waking up from sleep mode (free tier). This can take 5-10 minutes.\n` +
+                            `Try running the check again in a few minutes.\n\n` +
+                            `Details:\n${result.output.join('\n')}`,
+                            'info'
+                        );
+                        break;
+                    case 'circuit_breaker':
+                        showAlert(
+                            `Too many failed attempts. The circuit breaker is active to prevent wasteful retries.\n` +
+                            `Please wait 10 minutes before trying again.\n\n` +
+                            `Details:\n${result.output.join('\n')}`,
+                            'warning'
+                        );
+                        break;
+                    default:
+                        showAlert(`Check failed: ${result.message}\n\nDetails:\n${result.output.join('\n')}`, 'error');
+                }
+            } else {
+                showAlert(`Check failed: ${result.message}\n\nDetails:\n${result.output.join('\n')}`, 'error');
+            }
         }
         
     } catch (error) {
