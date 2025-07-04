@@ -207,11 +207,13 @@ async function runDailyCheck() {
         const result = await api.post('/check', {});
         
         if (result.success) {
-            showAlert(`✅ Daily check completed! ${result.message}`, 'success');
+            // Format the output messages nicely
+            const statusMessages = result.output.join('\n');
+            showAlert(`✅ Daily check completed!\n\nLatest updates:\n${statusMessages}`, 'success');
             // Refresh status after daily check
             setTimeout(refreshStatus, 2000);
         } else {
-            showAlert(`Daily check completed with issues: ${result.message}`, 'error');
+            showAlert(`Daily check failed: ${result.message}\n\nDetails:\n${result.output.join('\n')}`, 'error');
         }
         
     } catch (error) {
@@ -249,4 +251,4 @@ setInterval(async () => {
         // Silently fail on auto-refresh
         console.log('Auto-refresh failed:', error.message);
     }
-}, 30000); 
+}, 30000);
