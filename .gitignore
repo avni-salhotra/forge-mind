@@ -3,6 +3,11 @@
 .env.local
 .env.production
 
+# Code review and planning documents (sensitive)
+CODE_REVIEW_REMEDIATION_PLAN.md
+*REMEDIATION*.md
+*SECURITY*.md
+
 # Node.js
 node_modules/
 npm-debug.log*
@@ -43,4 +48,9 @@ tmp/
 
 # Build outputs (if we add any)
 dist/
-build/ .env
+build/
+
+# Test files and backups
+*.backup
+*.test.json
+test-data/

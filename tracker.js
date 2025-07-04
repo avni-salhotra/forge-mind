@@ -814,6 +814,161 @@ class ProgressTracker {
   }
 
   /**
+   * Enhanced daily routine with rollback support and atomic transactions
+   */
+  async runDailyRoutineWithRollback() {
+    console.log('\n🕑 Daily routine with rollback support - Multi-problem support');
+    
+    // Import the enhanced database service functions
+    const { createCheckpoint, rollbackToCheckpoint, atomicProgressUpdate } = require('./lib/firebase');
+    
+    let checkpoint;
+    
+    try {
+      // Step 1: Create checkpoint before any changes
+      console.log('📋 Creating checkpoint before starting routine...');
+      checkpoint = await createCheckpoint();
+      
+      // Step 2: Check API health with longer initial attempt
+      console.log('🏥 Checking LeetCode API health...');
+      let apiHealth = await this.leetcodeApi.checkAPIHealth();
+      
+      if (!apiHealth.healthy) {
+        if (apiHealth.circuitBreaker) {
+          console.log('🔌 Circuit breaker is active - will retry on next scheduled run');
+          return;
+        }
+
+        console.log('⚡ API appears to be sleeping, starting wake-up process...');
+        const wakeupSuccess = await this.leetcodeApi.wakeUpAPI();
+        
+        if (!wakeupSuccess) {
+          console.log('❌ API failed to wake up after extended attempts');
+          console.log('💡 Will retry on next scheduled run');
+          return;
+        }
+      }
+
+      // Step 3: Load progress and settings (using atomic operations)
+      const [progress, settings] = await Promise.all([
+        databaseService.loadProgress(),
+        databaseService.loadSettings()
+      ]);
+      
+      const now = new Date();
+      const todayStr = format(now, 'yyyy-MM-dd');
+      
+      console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
+      console.log(`📅 Last sent: ${progress.lastSentDate}, Today: ${todayStr}`);
+
+      // Check if we already sent problems today
+      if (progress.lastSentDate === todayStr) {
+        console.log('⏭️ Problems already sent today. Skipping daily routine.');
+        console.log(`📝 Today's problems: [${progress.sentProblems.map(p => p.slug).join(', ')}]`);
+        return;
+      }
+
+      // Step 4: Atomically update solved status
+      console.log('🔍 Checking for solved problems with atomic update...');
+      const progressWithUpdatedSolved = await atomicProgressUpdate('default', async (currentProgress) => {
+        await this.updateSolvedStatusInProgress(currentProgress, STUDY_PLAN.username);
+        return currentProgress;
+      });
+
+      // Step 5: Calculate what problems to send today
+      const todaysCalculation = calculateTodaysProblems(progressWithUpdatedSolved, settings);
+      
+      if (todaysCalculation.problems.length === 0) {
+        console.log('🎉 Study plan completed! No more problems to send.');
+        return;
+      }
+
+      console.log(`📝 Sending ${todaysCalculation.problems.length} problems:`);
+      console.log(`  - Unfinished: ${todaysCalculation.unfinished.length}`);
+      console.log(`  - New: ${todaysCalculation.newProblems.length}`);
+
+      // Step 6: Get problem details for email
+      const problemDetails = this.getProblemDetails(todaysCalculation.problems);
+      const unfinishedDetails = problemDetails.filter(p => todaysCalculation.unfinished.includes(p.slug));
+      const newProblemDetails = problemDetails.filter(p => todaysCalculation.newProblems.includes(p.slug));
+
+      // Step 7: Send appropriate email (this is the critical operation that might fail)
+      console.log('📧 Sending email notification...');
+      if (problemDetails.length === 1) {
+        // Single problem - use original email format
+        const problem = problemDetails[0];
+        const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
+        if (todaysCalculation.unfinished.includes(problem.slug)) {
+          await this.emailService.sendReminderEmail(problem, topicName);
+        } else {
+          await this.emailService.sendTodaysQuestionEmail(problem, topicName);
+        }
+      } else {
+        // Multiple problems - use new email format
+        await this.emailService.sendMultipleProblemsEmail(problemDetails, {
+          unfinished: unfinishedDetails,
+          newProblems: newProblemDetails,
+          totalCount: problemDetails.length
+        });
+      }
+      
+      console.log('✅ Email sent successfully');
+
+      // Step 8: Atomically update progress - only after email success
+      console.log('💾 Updating progress with atomic transaction...');
+      await atomicProgressUpdate('default', (currentProgress) => {
+        // Preserve unsolved problems
+        const unsolvedProblems = currentProgress.sentProblems.filter(p => !p.solved);
+        const newSentProblems = todaysCalculation.problems.map(slug => {
+          // Check if this problem was previously unsolved
+          const existingProblem = unsolvedProblems.find(p => p.slug === slug);
+          if (existingProblem) {
+            return existingProblem; // Keep the existing record
+          }
+          // Create new record for new problems
+          return {
+            slug: slug,
+            solved: false,
+            sentDate: todayStr
+          };
+        });
+
+        return {
+          ...currentProgress,
+          lastSentDate: todayStr,
+          sentProblems: newSentProblems,
+          studyPlanPosition: todaysCalculation.updatedPosition,
+          pendingQueue: todaysCalculation.updatedPendingQueue,
+          settingsAtSendTime: {
+            num_questions: settings.num_questions,
+            timestamp: new Date().toISOString()
+          }
+        };
+      });
+
+      console.log('✅ Daily routine completed successfully with rollback protection');
+      
+    } catch (error) {
+      console.error('❌ Daily routine failed, initiating rollback...', error.message);
+      
+      // Rollback to checkpoint on any failure
+      if (checkpoint) {
+        try {
+          await rollbackToCheckpoint(checkpoint);
+          console.log('🔄 Successfully rolled back to checkpoint');
+        } catch (rollbackError) {
+          console.error('💥 CRITICAL: Rollback failed!', rollbackError.message);
+          // This is a critical failure - the system is in an inconsistent state
+          throw new Error(`Daily routine failed and rollback failed: ${rollbackError.message}`);
+        }
+      }
+      
+      // Re-throw the original error
+      throw error;
+    }
+  }
+
+  /**
    * Update solved status for sent problems
    */
   async updateSolvedStatus(progress, username) {
@@ -880,6 +1035,98 @@ class ProgressTracker {
         console.error('API Response Status:', error.response.status);
         console.error('API Response Data:', error.response.data);
       }
+    }
+  }
+
+  /**
+   * Update solved status for sent problems (internal method for atomic operations)
+   * This modifies the progress object in-place
+   */
+  async updateSolvedStatusInProgress(progress, username) {
+    try {
+      console.log(`🔍 Checking recent submissions for ${username}...`);
+      const submissions = await this.leetcodeApi.getUserSubmissions(username, 20);
+      
+      if (!submissions.submission || !Array.isArray(submissions.submission)) {
+        console.log('⚠️ Invalid API response structure');
+        return;
+      }
+
+      // Only look at accepted submissions and convert timestamps safely
+      const acceptedSubmissions = submissions.submission
+        .filter(s => (s.statusDisplay || '').toLowerCase() === 'accepted')
+        .map(s => {
+          try {
+            // Use safe timestamp parsing
+            const timestampNum = parseInt(s.timestamp);
+            if (isNaN(timestampNum) || timestampNum < 0) {
+              console.warn(`⚠️ Invalid timestamp for ${s.titleSlug}: ${s.timestamp}`);
+              return null;
+            }
+            
+            // Handle both seconds and milliseconds
+            const timestampMs = timestampNum < 1e12 ? timestampNum * 1000 : timestampNum;
+            const date = new Date(timestampMs);
+            
+            // Validate the date
+            if (isNaN(date.getTime())) {
+              console.warn(`⚠️ Invalid date for ${s.titleSlug}: ${timestampMs}`);
+              return null;
+            }
+            
+            return {
+              slug: s.titleSlug,
+              timestamp: date
+            };
+          } catch (error) {
+            console.warn(`⚠️ Error parsing submission ${s.titleSlug}:`, error.message);
+            return null;
+          }
+        })
+        .filter(Boolean); // Remove null entries
+
+      console.log(`📝 Found ${acceptedSubmissions.length} valid recent accepted submissions`);
+
+      // Update solved status for each unsolved sent problem
+      let solvedCount = 0;
+      progress.sentProblems.forEach(sentProblem => {
+        if (sentProblem.solved) {
+          return; // Already solved, skip
+        }
+
+        try {
+          // Get assignment time
+          const assignmentTime = new Date(sentProblem.sentDate);
+          if (isNaN(assignmentTime.getTime())) {
+            console.warn(`⚠️ Invalid sentDate for ${sentProblem.slug}: ${sentProblem.sentDate}`);
+            return;
+          }
+
+          // Look for an accepted submission after assignment
+          const matchingSubmission = acceptedSubmissions.find(sub => 
+            sub.slug === sentProblem.slug && sub.timestamp > assignmentTime
+          );
+
+          if (matchingSubmission) {
+            sentProblem.solved = true;
+            sentProblem.solvedTimestamp = matchingSubmission.timestamp.toISOString();
+            solvedCount++;
+            console.log(`✅ ${sentProblem.slug} solved at ${matchingSubmission.timestamp.toLocaleString()}`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error processing ${sentProblem.slug}:`, error.message);
+        }
+      });
+
+      if (solvedCount > 0) {
+        console.log(`🎉 Updated ${solvedCount} problems as solved!`);
+      } else {
+        console.log('📝 No new problems marked as solved');
+      }
+
+    } catch (error) {
+      console.error('❌ Error checking submissions:', error.message);
+      // Don't throw here - we want to continue with the routine even if submission checking fails
     }
   }
 
