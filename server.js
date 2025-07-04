@@ -213,10 +213,15 @@ app.post('/api/check', async (req, res) => {
       await tracker.runDailyRoutine();
       capture.restore();
       
+      // Only send the last 5 most relevant lines to keep response size manageable
+      const relevantOutput = capture.output
+        .filter(line => !line.includes('🔄') && !line.includes('⏳')) // Filter out progress indicators
+        .slice(-5);
+      
       res.json({
         success: true,
         message: 'Daily check completed successfully',
-        output: capture.output.slice(-10)
+        output: relevantOutput
       });
       
     } catch (checkError) {
@@ -225,7 +230,7 @@ app.post('/api/check', async (req, res) => {
       res.json({
         success: false,
         message: checkError.message,
-        output: capture.output.slice(-10)
+        output: capture.output.slice(-5) // Only last 5 lines on error
       });
     }
     
@@ -378,4 +383,4 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-module.exports = app; 
+module.exports = app;
