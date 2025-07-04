@@ -22,6 +22,11 @@ const { STUDY_PLAN, TRACKER_CONFIG, StudyPlanHelper } = require('./study-plan');
 // Import Firebase database service
 const { databaseService } = require('./lib/firebase');
 
+// Import our new Phase 3-4 components
+const { DateUtils } = require('./lib/dateUtils');
+const { DataValidator, ValidationError } = require('./lib/dataValidator');
+const { MigrationService } = require('./lib/migrationService');
+
 /**
  * New Data Structure Management
  */
@@ -1052,34 +1057,30 @@ class ProgressTracker {
         return;
       }
 
-      // Only look at accepted submissions and convert timestamps safely
+      // Validate API response with our new framework
+      const validationResult = DataValidator.validateSafe(
+        { response: submissions, endpoint: 'getUserSubmissions' },
+        'submission-response',
+        'updateSolvedStatusInProgress'
+      );
+
+      if (!validationResult.success) {
+        console.warn(`⚠️ API response validation failed: ${validationResult.error.message}`);
+        // Continue with degraded functionality rather than failing completely
+      }
+
+      // Use DateUtils for robust timestamp parsing
       const acceptedSubmissions = submissions.submission
         .filter(s => (s.statusDisplay || '').toLowerCase() === 'accepted')
         .map(s => {
           try {
-            // Use safe timestamp parsing
-            const timestampNum = parseInt(s.timestamp);
-            if (isNaN(timestampNum) || timestampNum < 0) {
-              console.warn(`⚠️ Invalid timestamp for ${s.titleSlug}: ${s.timestamp}`);
-              return null;
-            }
-            
-            // Handle both seconds and milliseconds
-            const timestampMs = timestampNum < 1e12 ? timestampNum * 1000 : timestampNum;
-            const date = new Date(timestampMs);
-            
-            // Validate the date
-            if (isNaN(date.getTime())) {
-              console.warn(`⚠️ Invalid date for ${s.titleSlug}: ${timestampMs}`);
-              return null;
-            }
-            
+            const timestamp = DateUtils.parseApiTimestamp(s.timestamp, `submission-${s.titleSlug}`);
             return {
               slug: s.titleSlug,
-              timestamp: date
+              timestamp: timestamp
             };
           } catch (error) {
-            console.warn(`⚠️ Error parsing submission ${s.titleSlug}:`, error.message);
+            console.warn(`⚠️ Invalid timestamp for ${s.titleSlug}: ${error.message}`);
             return null;
           }
         })
@@ -1095,17 +1096,16 @@ class ProgressTracker {
         }
 
         try {
-          // Get assignment time
-          const assignmentTime = new Date(sentProblem.sentDate);
-          if (isNaN(assignmentTime.getTime())) {
-            console.warn(`⚠️ Invalid sentDate for ${sentProblem.slug}: ${sentProblem.sentDate}`);
-            return;
-          }
-
-          // Look for an accepted submission after assignment
-          const matchingSubmission = acceptedSubmissions.find(sub => 
-            sub.slug === sentProblem.slug && sub.timestamp > assignmentTime
-          );
+          // Look for an accepted submission after assignment using DateUtils
+          const matchingSubmission = acceptedSubmissions.find(sub => {
+            if (sub.slug !== sentProblem.slug) return false;
+            
+            return DateUtils.isSubmissionAfterAssignment(
+              sub.timestamp,
+              sentProblem.sentDate,
+              `progress-check-${sentProblem.slug}`
+            );
+          });
 
           if (matchingSubmission) {
             sentProblem.solved = true;
