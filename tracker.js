@@ -932,7 +932,27 @@ class ProgressTracker {
   async updateSolvedStatus(progress, username) {
     try {
       console.log(`🔍 Checking recent submissions for ${username}...`);
-      const submissions = await this.leetcodeApi.getUserSubmissions(username, 20); // 20 is enough for recent submissions
+      
+      // Use the existing getUserSubmissions method but override its strategy to be more aggressive
+      const submissions = await this.leetcodeApi.reliabilityService.withRetry(
+        async () => {
+          // Call the API directly to avoid double-wrapping
+          const response = await axios.get(
+            `${this.leetcodeApi.baseURL}/${username}/acSubmission?limit=20`,
+            { timeout: 15000 }
+          );
+          
+          if (!response.data || typeof response.data !== 'object') {
+            throw new Error('Invalid API response structure');
+          }
+          
+          return response.data;
+        },
+        { 
+          strategy: 'aggressive', // Use aggressive strategy for this critical operation
+          name: `updateSolvedStatus-getUserSubmissions(${username})`
+        }
+      );
       
       if (!submissions.submission || !Array.isArray(submissions.submission)) {
         console.log('⚠️ Invalid API response structure');
@@ -988,11 +1008,12 @@ class ProgressTracker {
       }
 
     } catch (error) {
-      console.error('❌ Error checking submissions:', error.message);
-      if (error.response) {
-        console.error('API Response Status:', error.response.status);
-        console.error('API Response Data:', error.response.data);
+      console.error('❌ Error checking submissions after all retry attempts:', error.message);
+      if (error.circuitBreaker) {
+        console.log('🔌 Circuit breaker is active - will retry on next scheduled run');
       }
+      // Re-throw the error so the caller knows the operation failed
+      throw error;
     }
   }
 
