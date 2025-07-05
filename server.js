@@ -334,21 +334,38 @@ app.post('/api/check', async (req, res) => {
     
     console.log(`📅 Date comparison: lastSent="${progress.lastSentDate}" vs today="${todayStr}"`);
     
-    if (progress.lastSentDate === todayStr) {
-      const duration = Date.now() - startTime;
-      console.log('⏭️ Problems already sent today. Returning ALREADY_SENT status.');
+    const alreadySentToday = progress.lastSentDate === todayStr;
+    
+    if (alreadySentToday) {
+      console.log('📝 Problems already sent today, but still checking for solved status...');
       console.log(`📝 Today's problems: [${progress.sentProblems.map(p => p.slug).join(', ')}]`);
       
-      // Return ALREADY_SENT immediately without API wake-up
-      return res.json({
-        status: 'ALREADY_SENT',
-        message: 'Problems already sent today',
-        duration: Math.round(duration / 1000) + 's',
-        timestamp: todayStr,
-        problems: progress.sentProblems.map(p => p.slug)
-      });
+      // Still check for solved problems even if already sent today
+      try {
+        console.log('🔍 Checking for solved problems...');
+        await tracker.updateSolvedStatus(progress, process.env.LEETCODE_USERNAME || 'avnisalhotra');
+        
+        const duration = Date.now() - startTime;
+        return res.json({
+          status: 'ALREADY_SENT_CHECKED_SOLVED',
+          message: 'Problems already sent today, but checked for new solved problems',
+          duration: Math.round(duration / 1000) + 's',
+          timestamp: todayStr,
+          problems: progress.sentProblems.map(p => p.slug)
+        });
+      } catch (solvedCheckError) {
+        console.error('❌ Error checking solved status:', solvedCheckError.message);
+        const duration = Date.now() - startTime;
+        return res.json({
+          status: 'ALREADY_SENT_SOLVED_CHECK_FAILED',
+          message: 'Problems already sent today, but failed to check solved status',
+          duration: Math.round(duration / 1000) + 's',
+          timestamp: todayStr,
+          error: solvedCheckError.message
+        });
+      }
     }
-    
+
     // Create checkpoint before running routine
     checkpoint = await createCheckpoint();
     
