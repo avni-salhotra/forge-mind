@@ -54,6 +54,168 @@ A comprehensive learning platform that helps you master both LeetCode problems a
     └── system-design-plan.json # System design topics
 ```
 
+## 🏗️ Design Pattern Choices
+
+This codebase implements **enterprise-grade reliability patterns** used by companies like Netflix, AWS, and Google. Here's how they work and why they matter:
+
+### 1️⃣ Rate Limiting (Sliding Window)
+**Implementation**: `lib/security.js` - `SecurityService`
+
+```js
+// Tracks attempts per IP with intelligent windowing
+this.maxAttempts = 5;           // 5 failed attempts
+this.windowMs = 900000;         // 15-minute window  
+this.blockDurationMs = 3600000; // 1-hour block
+```
+
+**How it works**:
+- Tracks each IP address separately in memory
+- Allows 5 attempts per 15-minute sliding window
+- Blocks abusive IPs for 1 hour after threshold exceeded
+- Automatically resets counters after successful authentication
+
+**Industry usage**:
+- **Twitter**: Prevents spam bots during viral events
+- **GitHub**: Protects API from repository mining abuse  
+- **AWS**: Enables pay-per-use pricing models
+- **Stripe**: Prevents payment fraud attempts
+
+### 2️⃣ Circuit Breaker (Netflix Hystrix Pattern)
+**Implementation**: `lib/reliabilityService.js` - `ReliabilityService`
+
+```js
+// Three-state system: CLOSED → OPEN → HALF_OPEN → CLOSED
+const CIRCUIT_STATES = {
+  CLOSED: 'closed',       // Normal operation
+  OPEN: 'open',           // Failing - reject immediately  
+  HALF_OPEN: 'half-open'  // Testing recovery
+};
+```
+
+**How it works**:
+- **CLOSED**: Normal operation, allows all requests
+- **OPEN**: After 5 failures, rejects requests instantly (no waiting)
+- **HALF_OPEN**: After 10 minutes, tests with limited requests
+- **Recovery**: 2 successful requests transition back to CLOSED
+
+**Industry usage**:
+- **Netflix**: Prevents cascading failures across microservices
+- **AWS Lambda**: Stops infinite retry loops
+- **Kubernetes**: Routes traffic away from failing pods
+- **Payment systems**: Prevents total outages when fraud detection fails
+
+### 3️⃣ Exponential Backoff with Jitter
+**Implementation**: `lib/reliabilityService.js` - `calculateWaitTime()`
+
+```js
+// Prevents "thundering herd" synchronized retries
+const jitter = Math.random() * 0.3; // ±30% randomization
+return cappedDelay * (1 + jitter);
+```
+
+**How it works**:
+- Base retry: 1s → 2s → 4s → 8s (exponential)
+- Jitter adds random 0-30% to spread retry timing
+- Prevents 1000+ apps from retrying simultaneously
+- Caps maximum delay to prevent infinite waits
+
+**Industry usage**:
+- **AWS SDK**: All service calls use exponential backoff
+- **Google Cloud**: Prevents API overload during outages
+- **Database drivers**: MySQL, PostgreSQL connection retries
+- **Message queues**: Kafka, RabbitMQ consumer backoff
+
+### 4️⃣ Cold Start Detection
+**Implementation**: `lib/reliabilityService.js` - `isColdStartError()`
+
+```js
+// Detects free-tier service wake-up scenarios
+const coldStartIndicators = [
+  'ECONNRESET', 'ETIMEDOUT', 'Service Unavailable', '502', '503'
+];
+```
+
+**How it works**:
+- Detects when external APIs are "sleeping" (free tier)
+- Switches to patient retry strategy (15s → 60s delays)
+- Uses longer timeouts and more attempts
+- Prevents premature failure during service wake-up
+
+**Industry usage**:
+- **AWS Lambda**: Cold start optimization
+- **Heroku**: Free dyno wake-up handling
+- **Vercel**: Serverless function initialization
+- **Docker**: Container startup coordination
+
+### 5️⃣ Adaptive Retry Strategies
+**Implementation**: `lib/reliabilityService.js` - `RETRY_STRATEGIES`
+
+```js
+// Different strategies for different scenarios
+normal: { maxAttempts: 3, baseDelay: 1000 },      // Quick failures
+coldStart: { maxAttempts: 8, baseDelay: 15000 },  // Patient waiting  
+aggressive: { maxAttempts: 12, baseDelay: 30000 }, // Critical ops
+fast: { maxAttempts: 2, baseDelay: 500 }          // Health checks
+```
+
+**How it works**:
+- **Normal**: Fast retries for temporary glitches
+- **Cold Start**: Patient retries for service wake-up
+- **Aggressive**: Maximum persistence for critical operations
+- **Fast**: Quick failure for non-essential checks
+
+**Industry usage**:
+- **Database connections**: Different strategies for reads vs writes
+- **Payment processing**: Aggressive retries for transaction completion
+- **Monitoring systems**: Fast failure for health checks
+- **File uploads**: Patient retries for large transfers
+
+### 6️⃣ Memory-Efficient Design
+**Implementation**: `lib/security.js` - Automatic cleanup
+
+```js
+// Prevents memory leaks in long-running processes
+setInterval(() => this.cleanup(), 300000); // Clean every 5 minutes
+```
+
+**How it works**:
+- Uses JavaScript `Map` for O(1) IP lookups
+- Automatically removes stale entries
+- Designed for Render free tier memory constraints
+- Scales efficiently with user growth
+
+**Industry usage**:
+- **Redis**: TTL-based key expiration
+- **CDN caches**: LRU eviction policies
+- **Application servers**: Session cleanup
+- **Log aggregation**: Rolling window storage
+
+### 🎯 Why These Patterns Matter
+
+**Without these patterns**:
+```
+😱 One angry user makes 1000 API calls → Server crashes
+😱 External API goes down → Your app waits 5 minutes per request
+😱 1000 apps retry simultaneously → "Thundering herd" kills API
+😱 Memory leaks → App crashes after 24 hours
+```
+
+**With these patterns**:
+```
+✅ Abusive users get blocked automatically
+✅ Failed APIs fail fast (instant feedback)
+✅ Retry timing is randomized (no coordination issues)
+✅ Memory usage stays constant over time
+```
+
+**Real-world impact**: These are the **same patterns** that power:
+- Netflix's 99.99% uptime during partial outages
+- AWS's ability to handle millions of requests/second
+- Google's graceful handling of traffic spikes
+- Stripe's reliable payment processing during Black Friday
+
+Your LeetCode tracker essentially implements **Netflix-grade reliability** for personal use! 🚀
+
 ## 🚀 Getting Started
 
 1. **Installation**
