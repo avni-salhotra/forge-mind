@@ -26,6 +26,7 @@ const { databaseService } = require('./lib/firebase');
 const { DateUtils } = require('./lib/dateUtils');
 const { DataValidator, ValidationError } = require('./lib/dataValidator');
 const { MigrationService } = require('./lib/migrationService');
+const { ReliabilityService } = require('./lib/reliabilityService');
 
 /**
  * New Data Structure Management
@@ -177,117 +178,106 @@ class LeetCodeAPI {
   constructor() {
     this.baseURL = TRACKER_CONFIG.api.baseUrl;
     this.timeout = TRACKER_CONFIG.api.timeout;
-    this.maxRetryAttempts = 12; // Allow for up to 10 minutes of retry
-    this.initialRetryDelay = 30000; // Start with 30s delay
-    this.maxRetryDelay = 120000; // Cap at 2 minutes per attempt
+    
+    // Legacy circuit breaker (will be replaced by ReliabilityService)
+    this.maxRetryAttempts = 12;
+    this.initialRetryDelay = 30000;
+    this.maxRetryDelay = 120000;
     this.circuitBreakerFailureCount = 0;
-    this.circuitBreakerResetTimeout = 600000; // 10 minutes
+    this.circuitBreakerResetTimeout = 600000;
     this.lastCircuitBreakerTrip = null;
+    
+    // Initialize ReliabilityService for enterprise-grade retry patterns
+    this.reliabilityService = new ReliabilityService({
+      failureThreshold: 5,
+      recoveryTimeout: 600000, // 10 minutes
+      halfOpenSuccessThreshold: 2
+    });
+    
+    console.log('🎯 LeetCodeAPI initialized with ReliabilityService');
   }
 
   /**
-   * Get user's recent submissions with retry logic
+   * Get user's recent submissions with enhanced retry logic
    */
   async getUserSubmissions(username, limit = 20) {
-    const maxRetries = 3;
-    const baseTimeout = 15000; // Start with 15 seconds
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const timeout = baseTimeout * attempt; // Exponential timeout increase
-        console.log(`🔄 API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
-        
+    return this.reliabilityService.withRetry(
+      async () => {
         const response = await axios.get(
           `${this.baseURL}/${username}/acSubmission?limit=${limit}`,
-          { timeout }
+          { timeout: 15000 }
         );
         
-        console.log(`✅ API call successful on attempt ${attempt}`);
-        return response.data;
-        
-      } catch (error) {
-        console.log(`⚠️ API attempt ${attempt} failed: ${error.message}`);
-        
-        if (attempt === maxRetries) {
-          console.error('❌ All API attempts failed - using fallback behavior');
-          // Return empty but valid structure to prevent crashes
-          return {
-            count: 0,
-            submission: []
-          };
+        if (!response.data || typeof response.data !== 'object') {
+          throw new Error('Invalid API response structure');
         }
         
-        // Wait before retry (with exponential backoff)
-        const waitTime = 2000 * attempt;
-        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return response.data;
+      },
+      { 
+        strategy: 'normal',
+        name: `getUserSubmissions(${username}, ${limit})`
       }
-    }
+    );
   }
 
   /**
-   * Get user profile data with retry logic
+   * Get user profile data with enhanced retry logic
    */
   async getUserProfile(username) {
-    const maxRetries = 3;
-    const baseTimeout = 15000;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const timeout = baseTimeout * attempt;
-        console.log(`🔄 Profile API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
-        
+    return this.reliabilityService.withRetry(
+      async () => {
         const response = await axios.get(
           `${this.baseURL}/${username}`,
-          { timeout }
+          { timeout: 15000 }
         );
         
-        console.log(`✅ Profile API successful on attempt ${attempt}`);
         return response.data;
-        
-      } catch (error) {
-        console.log(`⚠️ Profile API attempt ${attempt} failed: ${error.message}`);
-        
-        if (attempt === maxRetries) {
-          console.error('❌ Profile API failed - continuing with limited functionality');
-          throw error;
-        }
-        
-        const waitTime = 2000 * attempt;
-        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      },
+      { 
+        strategy: 'normal',
+        name: `getUserProfile(${username})`
       }
-    }
+    );
   }
 
   /**
-   * Get all submissions with pagination
+   * Get all submissions with pagination - NOW WITH RETRY LOGIC!
+   * This was one of the broken methods from the refactor
    */
   async getAllSubmissions(username, startDate) {
     console.log(`\n🔄 Fetching ALL submissions since ${startDate}...`);
     let allSubmissions = [];
     let offset = 0;
-    const limit = 100; // Maximum allowed by API
+    const limit = 100;
     let hasMore = true;
 
     while (hasMore) {
       try {
         console.log(`\n📑 Fetching page ${offset/limit + 1} (offset: ${offset}, limit: ${limit})`);
-        const response = await axios.get(
-          `${this.baseURL}/${username}/acSubmission?offset=${offset}&limit=${limit}`,
-          { timeout: this.timeout }
+        
+        // Use ReliabilityService for paginated requests
+        const response = await this.reliabilityService.withRetry(
+          async () => {
+            return axios.get(
+              `${this.baseURL}/${username}/acSubmission?offset=${offset}&limit=${limit}`,
+              { timeout: 15000 }
+            );
+          },
+          {
+            strategy: 'normal',
+            name: `getAllSubmissions page ${offset/limit + 1}`
+          }
         );
 
         const submissions = response.data.submission || [];
         console.log(`✅ Retrieved ${submissions.length} submissions`);
 
         if (submissions.length > 0) {
-          // Log first and last submission timestamps in this batch
           const first = new Date(parseInt(submissions[0].timestamp) * 1000);
           const last = new Date(parseInt(submissions[submissions.length - 1].timestamp) * 1000);
           console.log(`   Range: ${first.toISOString()} -> ${last.toISOString()}`);
 
-          // Check if we've gone past our start date
           const oldestTimestamp = parseInt(submissions[submissions.length - 1].timestamp) * 1000;
           const startTimestamp = new Date(startDate).getTime();
           if (oldestTimestamp < startTimestamp) {
@@ -298,18 +288,16 @@ class LeetCodeAPI {
 
         allSubmissions = allSubmissions.concat(submissions);
         
-        // If we got fewer results than limit, we've reached the end
         if (submissions.length < limit) {
           console.log(`📌 Reached end of submissions (got ${submissions.length} < ${limit})`);
           hasMore = false;
         } else {
           offset += limit;
-          // Add a small delay between requests
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } catch (error) {
         console.error(`❌ Error fetching submissions page:`, error.message);
-        hasMore = false; // Stop on error
+        hasMore = false;
       }
     }
 
@@ -321,156 +309,121 @@ class LeetCodeAPI {
   }
 
   /**
-   * Get submissions for a specific date
+   * Get submissions for a specific date - NOW WITH RETRY LOGIC!
+   * This was another broken method from the refactor
    */
   async getSubmissionsForDate(username, targetDate) {
-    try {
-      // Try to get submissions with date parameter
-      console.log(`\n🔍 Fetching submissions for ${targetDate}...`);
-      const response = await axios.get(
-        `${this.baseURL}/${username}/acSubmission?date=${targetDate}&limit=100`,
-        { timeout: this.timeout }
-      );
-
-      if (!response.data.submission || !Array.isArray(response.data.submission)) {
-        console.log('⚠️ Invalid API response structure');
-        return [];
-      }
-
-      console.log(`\n📊 Found ${response.data.submission.length} submissions:`);
-      response.data.submission.forEach(s => {
-        const timestamp = new Date(parseInt(s.timestamp) * 1000);
-        console.log(`\n${s.titleSlug}:`);
-        console.log(`  Status: ${s.statusDisplay}`);
-        console.log(`  UTC: ${timestamp.toISOString()}`);
-        console.log(`  Local: ${timestamp.toLocaleString()}`);
-      });
-
-      // Filter accepted submissions
-      const acceptedSubmissions = response.data.submission.filter(s => 
-        (s.statusDisplay || '').toLowerCase() === 'accepted'
-      );
-
-      if (acceptedSubmissions.length > 0) {
-        console.log(`\n✅ Found ${acceptedSubmissions.length} accepted submissions:`);
-        acceptedSubmissions.forEach(s => {
-          const timestamp = new Date(parseInt(s.timestamp) * 1000);
-          console.log(`\n${s.titleSlug}:`);
-          console.log(`  Status: ${s.statusDisplay}`);
-          console.log(`  UTC: ${timestamp.toISOString()}`);
-          console.log(`  Local: ${timestamp.toLocaleString()}`);
-        });
-      } else {
-        console.log('\n❌ No accepted submissions found');
-      }
-
-      return acceptedSubmissions;
-    } catch (error) {
-      console.error('❌ Error:', error.message);
-      return [];
-    }
-  }
-
-  /**
-   * Wake up the API (useful for cold starts on Render/Heroku)
-   */
-  async wakeUpAPI() {
-    console.log('🌅 Starting API wake-up process...');
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= this.maxRetryAttempts; attempt++) {
-      // Check circuit breaker
-      if (this.isCircuitBreakerTripped()) {
-        console.log('🔌 Circuit breaker activated - stopping wake-up attempts');
-        return false;
-      }
-
-      try {
-        // Calculate delay with exponential backoff (capped)
-        const delay = Math.min(
-          this.initialRetryDelay * Math.pow(1.5, attempt - 1),
-          this.maxRetryDelay
+    return this.reliabilityService.withRetry(
+      async () => {
+        console.log(`\n🔍 Fetching submissions for ${targetDate}...`);
+        const response = await axios.get(
+          `${this.baseURL}/${username}/acSubmission?date=${targetDate}&limit=100`,
+          { timeout: 15000 }
         );
 
-        console.log(`\n🔄 Wake-up attempt ${attempt}/${this.maxRetryAttempts}`);
-        console.log(`⏳ Timeout set to ${delay/1000}s`);
-        
-        const response = await axios.get(`${this.baseURL}/daily`, { timeout: delay });
-        
-        console.log('✅ API is awake and responsive!');
-        this.circuitBreakerFailureCount = 0; // Reset on success
-        return true;
-
-      } catch (error) {
-        lastError = error;
-        console.log(`⚠️ Attempt ${attempt} failed: ${error.message}`);
-        
-        if (attempt < this.maxRetryAttempts) {
-          const waitTime = Math.min(
-            this.initialRetryDelay * Math.pow(1.5, attempt - 1),
-            this.maxRetryDelay
-          );
-          
-          console.log(`⏳ Waiting ${waitTime/1000}s before next attempt...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+        if (!response.data.submission || !Array.isArray(response.data.submission)) {
+          throw new Error('Invalid API response structure');
         }
-      }
-    }
 
-    // If we get here, all attempts failed
-    this.incrementCircuitBreakerCount();
-    console.log('❌ API wake-up failed after all attempts');
-    console.log('💡 Circuit breaker may activate to prevent further attempts');
-    return false;
+        console.log(`\n📊 Found ${response.data.submission.length} submissions for ${targetDate}`);
+        return response.data.submission;
+      },
+      {
+        strategy: 'normal',
+        name: `getSubmissionsForDate(${targetDate})`
+      }
+    );
   }
 
   /**
-   * Check API health
+   * Enhanced wake up API with cold start strategy
+   */
+  async wakeUpAPI() {
+    console.log('🌅 Starting enhanced API wake-up process...');
+    
+    try {
+      await this.reliabilityService.withRetry(
+        async () => {
+          const response = await axios.get(`${this.baseURL}/daily`);
+          return response.data;
+        },
+        {
+          strategy: 'coldStart', // Use cold start strategy!
+          name: 'wakeUpAPI'
+        }
+      );
+      
+      console.log('✅ API wake-up successful with ReliabilityService!');
+      return true;
+      
+    } catch (error) {
+      console.log('❌ Enhanced API wake-up failed after all attempts');
+      console.log(`💡 Error: ${error.message}`);
+      
+      if (error.circuitBreaker) {
+        console.log('🔌 Circuit breaker is active - will prevent further attempts');
+      }
+      
+      return false;
+    }
+  }
+
+  /**
+   * Enhanced API health check
    */
   async checkAPIHealth() {
     try {
-      // Check if circuit breaker is tripped
-      if (this.isCircuitBreakerTripped()) {
-        console.log('🔌 Circuit breaker is active - preventing API calls');
+      // Check if our circuit breaker is tripped
+      if (this.reliabilityService.isCircuitOpen()) {
+        console.log('🔌 ReliabilityService circuit breaker is active');
         return { healthy: false, error: 'Circuit breaker active', circuitBreaker: true };
       }
 
-      const start = Date.now();
-      // Increased initial health check timeout
-      const response = await axios.get(`${this.baseURL}/daily`, { timeout: 30000 });
-      const duration = Date.now() - start;
+      const result = await this.reliabilityService.withRetry(
+        async () => {
+          const start = Date.now();
+          const response = await axios.get(`${this.baseURL}/daily`);
+          const duration = Date.now() - start;
+          return { response: response.data, duration };
+        },
+        {
+          strategy: 'fast', // Use fast strategy for health checks
+          name: 'checkAPIHealth'
+        }
+      );
       
-      // Reset circuit breaker on success
-      this.circuitBreakerFailureCount = 0;
+      console.log(`✅ Enhanced API Health: OK (${result.duration}ms response time)`);
+      return { healthy: true, responseTime: result.duration };
       
-      console.log(`✅ API Health: OK (${duration}ms response time)`);
-      return { healthy: true, responseTime: duration };
     } catch (error) {
-      console.log(`❌ API Health: POOR (${error.message})`);
-      this.incrementCircuitBreakerCount();
-      return { healthy: false, error: error.message };
+      console.log(`❌ Enhanced API Health: POOR (${error.message})`);
+      return { healthy: false, error: error.message, circuitBreaker: error.circuitBreaker };
     }
   }
 
+  // ...existing legacy methods for backward compatibility...
   isCircuitBreakerTripped() {
-    // Reset circuit breaker after timeout
-    if (this.lastCircuitBreakerTrip && 
-        Date.now() - this.lastCircuitBreakerTrip >= this.circuitBreakerResetTimeout) {
-      console.log('🔌 Circuit breaker reset after timeout');
-      this.circuitBreakerFailureCount = 0;
-      this.lastCircuitBreakerTrip = null;
-      return false;
-    }
-
-    return this.circuitBreakerFailureCount >= 5;
+    // Delegate to ReliabilityService
+    return this.reliabilityService.isCircuitOpen();
   }
 
   incrementCircuitBreakerCount() {
-    this.circuitBreakerFailureCount++;
-    if (this.circuitBreakerFailureCount >= 5 && !this.lastCircuitBreakerTrip) {
-      this.lastCircuitBreakerTrip = Date.now();
-      console.log('🔌 Circuit breaker tripped - will prevent API calls for 10 minutes');
-    }
+    // This is now handled by ReliabilityService automatically
+    console.log('⚠️ Legacy circuit breaker method called - handled by ReliabilityService');
+  }
+
+  /**
+   * Get reliability metrics for monitoring
+   */
+  getReliabilityMetrics() {
+    return this.reliabilityService.getMetrics();
+  }
+
+  /**
+   * Reset reliability service (for testing)
+   */
+  resetReliability() {
+    this.reliabilityService.resetCircuitBreaker();
   }
 }
 

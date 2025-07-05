@@ -315,9 +315,10 @@ app.post('/api/test', async (req, res) => {
   }
 });
 
-// Run daily check (with rollback support)
+// Run daily check (with rollback support) - COMPACT VERSION FOR CRON
 app.post('/api/check', async (req, res) => {
   let checkpoint;
+  const startTime = Date.now();
   
   try {
     console.log('⚡ Running daily check via API...');
@@ -325,55 +326,111 @@ app.post('/api/check', async (req, res) => {
     // Create checkpoint before running routine
     checkpoint = await createCheckpoint();
     
-    const capture = captureConsole();
-    const startTime = Date.now();
+    // Determine if this is from cron-job.org (check user agent or other indicators)
+    const userAgent = req.headers['user-agent'] || '';
+    const isCronJob = userAgent.includes('cron-job.org') || 
+                     req.headers['x-forwarded-for'] ||
+                     !req.headers.referer; // Likely automated if no referer
     
-    try {
-      await tracker.runDailyRoutineWithRollback();
-      capture.restore();
+    let capture;
+    if (isCronJob) {
+      // Ultra-minimal logging for cron jobs
+      const originalLog = console.log;
+      const originalError = console.error;
+      let errorMessages = [];
       
-      const duration = Date.now() - startTime;
+      console.log = () => {}; // Silence all normal logging
+      console.error = (...args) => {
+        errorMessages.push(args.join(' '));
+        originalError(...args); // Still log to server
+      };
       
-      res.json({
-        success: true,
-        message: 'Daily check completed successfully',
-        duration: `${duration}ms`,
-        output: capture.importantOutput.slice(-3),
-        coldStart: {
-          duration,
-          status: 'completed'
-        }
-      });
+      try {
+        await tracker.runDailyRoutineWithRollback();
+        
+        // Restore console
+        console.log = originalLog;
+        console.error = originalError;
+        
+        const duration = Date.now() - startTime;
+        
+        // Ultra-compact success response for cron
+        res.json({
+          status: 'OK',
+          duration: Math.round(duration / 1000) + 's',
+          timestamp: new Date().toISOString().split('T')[0]
+        });
+        
+      } catch (routineError) {
+        // Restore console
+        console.log = originalLog;
+        console.error = originalError;
+        
+        const duration = Date.now() - startTime;
+        
+        // Compact error response for cron
+        let status = 'ERROR';
+        if (routineError.message.includes('Circuit breaker')) status = 'CIRCUIT_BREAKER';
+        else if (routineError.message.includes('timeout')) status = 'TIMEOUT';
+        
+        res.json({
+          status,
+          duration: Math.round(duration / 1000) + 's',
+          error: routineError.message.slice(0, 80) + '...',
+          timestamp: new Date().toISOString().split('T')[0]
+        });
+      }
+    } else {
+      // Full verbose output for web interface
+      capture = captureConsole();
       
-    } catch (routineError) {
-      capture.restore();
-      const duration = Date.now() - startTime;
-      
-      // Extract circuit breaker info if present
-      const circuitBreakerActive = capture.output.some(msg => 
-        msg.includes('Circuit breaker is active') || 
-        msg.includes('Circuit breaker tripped')
-      );
+      try {
+        await tracker.runDailyRoutineWithRollback();
+        capture.restore();
+        
+        const duration = Date.now() - startTime;
+        
+        res.json({
+          success: true,
+          message: 'Daily check completed successfully',
+          duration: `${duration}ms`,
+          output: capture.importantOutput.slice(-3),
+          coldStart: {
+            duration,
+            status: 'completed'
+          }
+        });
+        
+      } catch (routineError) {
+        capture.restore();
+        const duration = Date.now() - startTime;
+        
+        // Extract circuit breaker info if present
+        const circuitBreakerActive = capture.output.some(msg => 
+          msg.includes('Circuit breaker is active') || 
+          msg.includes('Circuit breaker tripped')
+        );
 
-      // Check if it's a cold start issue
-      const isColdStart = capture.output.some(msg => 
-        msg.includes('API appears to be sleeping') || 
-        msg.includes('starting wake-up process')
-      );
-      
-      res.json({
-        success: false,
-        message: routineError.message,
-        duration: `${duration}ms`,
-        output: capture.importantOutput.slice(-3),
-        coldStart: {
-          inProgress: isColdStart,
-          duration,
-          circuitBreakerActive,
-          status: circuitBreakerActive ? 'circuit_breaker' : 
-                 isColdStart ? 'waking_up' : 'error'
-        }
-      });
+        // Check if it's a cold start issue
+        const isColdStart = capture.output.some(msg => 
+          msg.includes('API appears to be sleeping') || 
+          msg.includes('starting wake-up process')
+        );
+        
+        res.json({
+          success: false,
+          message: routineError.message,
+          duration: `${duration}ms`,
+          output: capture.importantOutput.slice(-3),
+          coldStart: {
+            inProgress: isColdStart,
+            duration,
+            circuitBreakerActive,
+            status: circuitBreakerActive ? 'circuit_breaker' : 
+                   isColdStart ? 'waking_up' : 'error'
+          }
+        });
+      }
     }
     
   } catch (error) {
@@ -389,10 +446,112 @@ app.post('/api/check', async (req, res) => {
       }
     }
     
+    const duration = Date.now() - startTime;
+    
+    // Return compact response for cron, detailed for web
+    const userAgent = req.headers['user-agent'] || '';
+    const isCronJob = userAgent.includes('cron-job.org') || 
+                     req.headers['x-forwarded-for'] ||
+                     !req.headers.referer;
+    
+    if (isCronJob) {
+      res.status(500).json({ 
+        status: 'CRITICAL_ERROR',
+        duration: Math.round(duration / 1000) + 's',
+        timestamp: new Date().toISOString().split('T')[0]
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to run daily check',
+        message: error.message
+      });
+    }
+  }
+});
+
+// Compact endpoint for cron-job.org (minimal output)
+app.post('/api/cron-check', async (req, res) => {
+  let checkpoint;
+  const startTime = Date.now();
+  
+  try {
+    console.log('🕐 Running compact cron check...');
+    
+    // Create checkpoint before running routine
+    checkpoint = await createCheckpoint();
+    
+    // Silence console output for cron
+    const originalLog = console.log;
+    const originalError = console.error;
+    let hasError = false;
+    let errorMessage = '';
+    
+    console.log = () => {}; // Silence normal logging
+    console.error = (...args) => {
+      hasError = true;
+      errorMessage = args.join(' ');
+      originalError(...args); // Still log to server
+    };
+    
+    try {
+      await tracker.runDailyRoutineWithRollback();
+      
+      // Restore console
+      console.log = originalLog;
+      console.error = originalError;
+      
+      const duration = Date.now() - startTime;
+      
+      // Ultra-compact success response
+      res.json({
+        status: 'OK',
+        duration: Math.round(duration / 1000) + 's',
+        timestamp: new Date().toISOString().split('T')[0] // Just date
+      });
+      
+    } catch (routineError) {
+      // Restore console
+      console.log = originalLog;
+      console.error = originalError;
+      
+      const duration = Date.now() - startTime;
+      
+      // Check error type for compact response
+      const isCircuitBreaker = routineError.message.includes('Circuit breaker');
+      const isColdStart = routineError.message.includes('timeout') || 
+                         routineError.message.includes('ECONNRESET');
+      
+      let status = 'ERROR';
+      if (isCircuitBreaker) status = 'CIRCUIT_BREAKER';
+      else if (isColdStart) status = 'COLD_START';
+      
+      res.json({
+        status,
+        duration: Math.round(duration / 1000) + 's',
+        error: routineError.message.slice(0, 100) + '...', // Truncate error
+        timestamp: new Date().toISOString().split('T')[0]
+      });
+    }
+    
+  } catch (error) {
+    console.error('Critical cron check error:', error.message);
+    
+    // Rollback on failure
+    if (checkpoint) {
+      try {
+        await rollbackToCheckpoint(checkpoint);
+      } catch (rollbackError) {
+        console.error('❌ Rollback failed:', rollbackError.message);
+      }
+    }
+    
+    const duration = Date.now() - startTime;
+    
     res.status(500).json({ 
-      success: false, 
-      error: 'Failed to run daily check',
-      message: error.message
+      status: 'CRITICAL_ERROR',
+      duration: Math.round(duration / 1000) + 's',
+      timestamp: new Date().toISOString().split('T')[0]
     });
   }
 });
