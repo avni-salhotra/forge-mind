@@ -323,6 +323,25 @@ app.post('/api/check', async (req, res) => {
   try {
     console.log('⚡ Running daily check via API...');
     
+    // FIRST: Check if problems were already sent today BEFORE creating checkpoint or waking API
+    const progress = await databaseService.loadProgress();
+    const todayStr = new Date().toISOString().split('T')[0]; // yyyy-mm-dd format
+    
+    if (progress.lastSentDate === todayStr) {
+      const duration = Date.now() - startTime;
+      console.log('⏭️ Problems already sent today. Returning ALREADY_SENT status.');
+      console.log(`📝 Today's problems: [${progress.sentProblems.map(p => p.slug).join(', ')}]`);
+      
+      // Return ALREADY_SENT immediately without API wake-up
+      return res.json({
+        status: 'ALREADY_SENT',
+        message: 'Problems already sent today',
+        duration: Math.round(duration / 1000) + 's',
+        timestamp: todayStr,
+        problems: progress.sentProblems.map(p => p.slug)
+      });
+    }
+    
     // Create checkpoint before running routine
     checkpoint = await createCheckpoint();
     
@@ -338,18 +357,16 @@ app.post('/api/check', async (req, res) => {
       const originalLog = console.log;
       const originalError = console.error;
       let errorMessages = [];
-      let alreadySentMessage = '';
       
       console.log = (...args) => {
         const message = args.join(' ');
-        // CAPTURE "ALREADY SENT" MESSAGES - THIS IS THE FIX!
-        if (message.includes('already sent today') || 
-            message.includes('Problems already sent today') ||
-            message.includes('⏭️')) {
-          alreadySentMessage = message;
-          originalLog(...args); // Still show this important message
+        // Only show critical messages for cron
+        if (message.includes('✅') || 
+            message.includes('❌') || 
+            message.includes('📝') || 
+            message.includes('🎉')) {
+          originalLog(...args);
         }
-        // Silence everything else for cron
       };
       
       console.error = (...args) => {
@@ -366,20 +383,12 @@ app.post('/api/check', async (req, res) => {
         
         const duration = Date.now() - startTime;
         
-        // Ultra-compact success response for cron with already-sent info
-        const response = {
+        // Ultra-compact success response for cron
+        res.json({
           status: 'OK',
           duration: Math.round(duration / 1000) + 's',
-          timestamp: new Date().toISOString().split('T')[0]
-        };
-        
-        // Add already-sent indicator if detected
-        if (alreadySentMessage) {
-          response.status = 'ALREADY_SENT';
-          response.message = 'Problems already sent today';
-        }
-        
-        res.json(response);
+          timestamp: todayStr
+        });
         
       } catch (routineError) {
         // Restore console
@@ -397,7 +406,7 @@ app.post('/api/check', async (req, res) => {
           status,
           duration: Math.round(duration / 1000) + 's',
           error: routineError.message.slice(0, 80) + '...',
-          timestamp: new Date().toISOString().split('T')[0]
+          timestamp: todayStr
         });
       }
     } else {
@@ -467,6 +476,7 @@ app.post('/api/check', async (req, res) => {
     }
     
     const duration = Date.now() - startTime;
+    const todayStr = new Date().toISOString().split('T')[0];
     
     // Return compact response for cron, detailed for web
     const userAgent = req.headers['user-agent'] || '';
@@ -478,7 +488,7 @@ app.post('/api/check', async (req, res) => {
       res.status(500).json({ 
         status: 'CRITICAL_ERROR',
         duration: Math.round(duration / 1000) + 's',
-        timestamp: new Date().toISOString().split('T')[0]
+        timestamp: todayStr
       });
     } else {
       res.status(500).json({ 
