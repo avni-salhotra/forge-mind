@@ -2,6 +2,7 @@
 
 /**
  * LeetCode Tracker Web Server
+ * Last updated: July 4, 2025 - Fixed "already sent today" detection
  * 
  * Provides:
  * 1. Web interface for settings management
@@ -325,7 +326,13 @@ app.post('/api/check', async (req, res) => {
     
     // FIRST: Check if problems were already sent today BEFORE creating checkpoint or waking API
     const progress = await databaseService.loadProgress();
-    const todayStr = new Date().toISOString().split('T')[0]; // yyyy-mm-dd format
+    
+    // Use consistent timezone for date comparison (PST/PDT - your local timezone)
+    const now = new Date();
+    const localDate = new Date(now.getTime() - (8 * 60 * 60 * 1000)); // PST is UTC-8
+    const todayStr = localDate.toISOString().split('T')[0]; // yyyy-mm-dd format
+    
+    console.log(`📅 Date comparison: lastSent="${progress.lastSentDate}" vs today="${todayStr}"`);
     
     if (progress.lastSentDate === todayStr) {
       const duration = Date.now() - startTime;
