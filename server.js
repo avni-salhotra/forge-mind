@@ -334,12 +334,24 @@ app.post('/api/check', async (req, res) => {
     
     let capture;
     if (isCronJob) {
-      // Ultra-minimal logging for cron jobs
+      // Ultra-minimal logging for cron jobs but capture critical messages
       const originalLog = console.log;
       const originalError = console.error;
       let errorMessages = [];
+      let alreadySentMessage = '';
       
-      console.log = () => {}; // Silence all normal logging
+      console.log = (...args) => {
+        const message = args.join(' ');
+        // CAPTURE "ALREADY SENT" MESSAGES - THIS IS THE FIX!
+        if (message.includes('already sent today') || 
+            message.includes('Problems already sent today') ||
+            message.includes('⏭️')) {
+          alreadySentMessage = message;
+          originalLog(...args); // Still show this important message
+        }
+        // Silence everything else for cron
+      };
+      
       console.error = (...args) => {
         errorMessages.push(args.join(' '));
         originalError(...args); // Still log to server
@@ -354,12 +366,20 @@ app.post('/api/check', async (req, res) => {
         
         const duration = Date.now() - startTime;
         
-        // Ultra-compact success response for cron
-        res.json({
+        // Ultra-compact success response for cron with already-sent info
+        const response = {
           status: 'OK',
           duration: Math.round(duration / 1000) + 's',
           timestamp: new Date().toISOString().split('T')[0]
-        });
+        };
+        
+        // Add already-sent indicator if detected
+        if (alreadySentMessage) {
+          response.status = 'ALREADY_SENT';
+          response.message = 'Problems already sent today';
+        }
+        
+        res.json(response);
         
       } catch (routineError) {
         // Restore console
