@@ -22,6 +22,9 @@ const { STUDY_PLAN, TRACKER_CONFIG, StudyPlanHelper } = require('./study-plan');
 // Import Firebase database service
 const { databaseService } = require('./lib/firebase');
 
+// Import ReliabilityService for persistent wake-up
+const { ReliabilityService } = require('./lib/reliabilityService');
+
 /**
  * New Data Structure Management
  */
@@ -172,81 +175,45 @@ class LeetCodeAPI {
   constructor() {
     this.baseURL = TRACKER_CONFIG.api.baseUrl;
     this.timeout = TRACKER_CONFIG.api.timeout;
+    this.reliabilityService = new ReliabilityService();
   }
 
   /**
    * Get user's recent submissions with retry logic
    */
   async getUserSubmissions(username, limit = 20) {
-    const maxRetries = 3;
-    const baseTimeout = 15000; // Start with 15 seconds
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const timeout = baseTimeout * attempt; // Exponential timeout increase
-        console.log(`🔄 API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
-        
+    return await this.reliabilityService.withRetry(
+      async () => {
         const response = await axios.get(
           `${this.baseURL}/${username}/acSubmission?limit=${limit}`,
-          { timeout }
+          { timeout: 30000 }
         );
-        
-        console.log(`✅ API call successful on attempt ${attempt}`);
         return response.data;
-        
-      } catch (error) {
-        console.log(`⚠️ API attempt ${attempt} failed: ${error.message}`);
-        
-        if (attempt === maxRetries) {
-          console.error('❌ All API attempts failed - using fallback behavior');
-          // Return empty but valid structure to prevent crashes
-          return {
-            count: 0,
-            submission: []
-          };
-        }
-        
-        // Wait before retry (with exponential backoff)
-        const waitTime = 2000 * attempt;
-        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      },
+      {
+        strategy: 'coldStart',
+        name: `getUserSubmissions(${username})`
       }
-    }
+    );
   }
 
   /**
    * Get user profile data with retry logic
    */
   async getUserProfile(username) {
-    const maxRetries = 3;
-    const baseTimeout = 15000;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const timeout = baseTimeout * attempt;
-        console.log(`🔄 Profile API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
-        
+    return await this.reliabilityService.withRetry(
+      async () => {
         const response = await axios.get(
           `${this.baseURL}/${username}`,
-          { timeout }
+          { timeout: 30000 }
         );
-        
-        console.log(`✅ Profile API successful on attempt ${attempt}`);
         return response.data;
-        
-      } catch (error) {
-        console.log(`⚠️ Profile API attempt ${attempt} failed: ${error.message}`);
-        
-        if (attempt === maxRetries) {
-          console.error('❌ Profile API failed - continuing with limited functionality');
-          throw error;
-        }
-        
-        const waitTime = 2000 * attempt;
-        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      },
+      {
+        strategy: 'coldStart',
+        name: `getUserProfile(${username})`
       }
-    }
+    );
   }
 
   /**
@@ -262,9 +229,18 @@ class LeetCodeAPI {
     while (hasMore) {
       try {
         console.log(`\n📑 Fetching page ${offset/limit + 1} (offset: ${offset}, limit: ${limit})`);
-        const response = await axios.get(
-          `${this.baseURL}/${username}/acSubmission?offset=${offset}&limit=${limit}`,
-          { timeout: this.timeout }
+        
+        const response = await this.reliabilityService.withRetry(
+          async () => {
+            return await axios.get(
+              `${this.baseURL}/${username}/acSubmission?offset=${offset}&limit=${limit}`,
+              { timeout: 30000 }
+            );
+          },
+          {
+            strategy: 'coldStart',
+            name: `getAllSubmissions page ${offset/limit + 1}`
+          }
         );
 
         const submissions = response.data.submission || [];
@@ -313,78 +289,83 @@ class LeetCodeAPI {
    * Get submissions for a specific date
    */
   async getSubmissionsForDate(username, targetDate) {
-    try {
-      // Try to get submissions with date parameter
-      console.log(`\n🔍 Fetching submissions for ${targetDate}...`);
-      const response = await axios.get(
-        `${this.baseURL}/${username}/acSubmission?date=${targetDate}&limit=100`,
-        { timeout: this.timeout }
-      );
+    return await this.reliabilityService.withRetry(
+      async () => {
+        console.log(`\n🔍 Fetching submissions for ${targetDate}...`);
+        const response = await axios.get(
+          `${this.baseURL}/${username}/acSubmission?date=${targetDate}&limit=100`,
+          { timeout: 30000 }
+        );
 
-      if (!response.data.submission || !Array.isArray(response.data.submission)) {
-        console.log('⚠️ Invalid API response structure');
-        return [];
-      }
+        if (!response.data.submission || !Array.isArray(response.data.submission)) {
+          console.log('⚠️ Invalid API response structure');
+          return [];
+        }
 
-      console.log(`\n📊 Found ${response.data.submission.length} submissions:`);
-      response.data.submission.forEach(s => {
-        const timestamp = new Date(parseInt(s.timestamp) * 1000);
-        console.log(`\n${s.titleSlug}:`);
-        console.log(`  Status: ${s.statusDisplay}`);
-        console.log(`  UTC: ${timestamp.toISOString()}`);
-        console.log(`  Local: ${timestamp.toLocaleString()}`);
-      });
-
-      // Filter accepted submissions
-      const acceptedSubmissions = response.data.submission.filter(s => 
-        (s.statusDisplay || '').toLowerCase() === 'accepted'
-      );
-
-      if (acceptedSubmissions.length > 0) {
-        console.log(`\n✅ Found ${acceptedSubmissions.length} accepted submissions:`);
-        acceptedSubmissions.forEach(s => {
+        console.log(`\n📊 Found ${response.data.submission.length} submissions:`);
+        response.data.submission.forEach(s => {
           const timestamp = new Date(parseInt(s.timestamp) * 1000);
           console.log(`\n${s.titleSlug}:`);
           console.log(`  Status: ${s.statusDisplay}`);
           console.log(`  UTC: ${timestamp.toISOString()}`);
           console.log(`  Local: ${timestamp.toLocaleString()}`);
         });
-      } else {
-        console.log('\n❌ No accepted submissions found');
-      }
 
-      return acceptedSubmissions;
-    } catch (error) {
-      console.error('❌ Error:', error.message);
-      return [];
-    }
+        // Filter accepted submissions
+        const acceptedSubmissions = response.data.submission.filter(s => 
+          (s.statusDisplay || '').toLowerCase() === 'accepted'
+        );
+
+        if (acceptedSubmissions.length > 0) {
+          console.log(`\n✅ Found ${acceptedSubmissions.length} accepted submissions:`);
+          acceptedSubmissions.forEach(s => {
+            const timestamp = new Date(parseInt(s.timestamp) * 1000);
+            console.log(`\n${s.titleSlug}:`);
+            console.log(`  Status: ${s.statusDisplay}`);
+            console.log(`  UTC: ${timestamp.toISOString()}`);
+            console.log(`  Local: ${timestamp.toLocaleString()}`);
+          });
+        } else {
+          console.log('\n❌ No accepted submissions found');
+        }
+
+        return acceptedSubmissions;
+      },
+      {
+        strategy: 'coldStart',
+        name: `getSubmissionsForDate(${targetDate})`
+      }
+    );
   }
 
   /**
-   * Wake up the API (useful for cold starts on Render/Heroku)
+   * Persistent wake up for Render free tier - will wait as long as needed
    */
   async wakeUpAPI() {
-    console.log('🌅 Waking up external API...');
-    try {
-      const response = await axios.get(`${this.baseURL}/daily`, { 
-        timeout: 30000 // Give it plenty of time for cold start
-      });
-      console.log('✅ API is awake and responsive');
-      return true;
-    } catch (error) {
-      console.log(`⚠️ API wake-up failed: ${error.message}`);
-      console.log('💡 This might slow down subsequent API calls');
-      return false;
-    }
+    console.log('🌅 Waking up external API (Render free tier can take 2-3 minutes)...');
+    
+    return await this.reliabilityService.withRetry(
+      async () => {
+        const response = await axios.get(`${this.baseURL}/daily`, { 
+          timeout: 60000 // 60 second timeout per attempt
+        });
+        console.log('✅ API is fully awake and responsive!');
+        return true;
+      },
+      {
+        strategy: 'aggressive', // Use aggressive strategy - up to 12 attempts over 12 minutes
+        name: 'API Wake-up (Render free tier)'
+      }
+    );
   }
 
   /**
-   * Check API health
+   * Check API health with proper timeout
    */
   async checkAPIHealth() {
     try {
       const start = Date.now();
-      const response = await axios.get(`${this.baseURL}/daily`, { timeout: 5000 });
+      const response = await axios.get(`${this.baseURL}/daily`, { timeout: 10000 });
       const duration = Date.now() - start;
       
       console.log(`✅ API Health: OK (${duration}ms response time)`);
