@@ -22,12 +22,6 @@ const { STUDY_PLAN, TRACKER_CONFIG, StudyPlanHelper } = require('./study-plan');
 // Import Firebase database service
 const { databaseService } = require('./lib/firebase');
 
-// Import our new Phase 3-4 components
-const { DateUtils } = require('./lib/dateUtils');
-const { DataValidator, ValidationError } = require('./lib/dataValidator');
-const { MigrationService } = require('./lib/migrationService');
-const { ReliabilityService } = require('./lib/reliabilityService');
-
 /**
  * New Data Structure Management
  */
@@ -178,106 +172,111 @@ class LeetCodeAPI {
   constructor() {
     this.baseURL = TRACKER_CONFIG.api.baseUrl;
     this.timeout = TRACKER_CONFIG.api.timeout;
-    
-    // Legacy circuit breaker (will be replaced by ReliabilityService)
-    this.maxRetryAttempts = 12;
-    this.initialRetryDelay = 30000;
-    this.maxRetryDelay = 120000;
-    this.circuitBreakerFailureCount = 0;
-    this.circuitBreakerResetTimeout = 600000;
-    this.lastCircuitBreakerTrip = null;
-    
-    // Initialize ReliabilityService for enterprise-grade retry patterns
-    this.reliabilityService = new ReliabilityService({
-      failureThreshold: 5,
-      recoveryTimeout: 600000, // 10 minutes
-      halfOpenSuccessThreshold: 2
-    });
-    
-    console.log('🎯 LeetCodeAPI initialized with ReliabilityService');
   }
 
   /**
-   * Get user's recent submissions with enhanced retry logic
+   * Get user's recent submissions with retry logic
    */
   async getUserSubmissions(username, limit = 20) {
-    return this.reliabilityService.withRetry(
-      async () => {
+    const maxRetries = 3;
+    const baseTimeout = 15000; // Start with 15 seconds
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const timeout = baseTimeout * attempt; // Exponential timeout increase
+        console.log(`🔄 API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
+        
         const response = await axios.get(
           `${this.baseURL}/${username}/acSubmission?limit=${limit}`,
-          { timeout: 15000 }
+          { timeout }
         );
         
-        if (!response.data || typeof response.data !== 'object') {
-          throw new Error('Invalid API response structure');
+        console.log(`✅ API call successful on attempt ${attempt}`);
+        return response.data;
+        
+      } catch (error) {
+        console.log(`⚠️ API attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt === maxRetries) {
+          console.error('❌ All API attempts failed - using fallback behavior');
+          // Return empty but valid structure to prevent crashes
+          return {
+            count: 0,
+            submission: []
+          };
         }
         
-        return response.data;
-      },
-      { 
-        strategy: 'normal',
-        name: `getUserSubmissions(${username}, ${limit})`
+        // Wait before retry (with exponential backoff)
+        const waitTime = 2000 * attempt;
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-    );
+    }
   }
 
   /**
-   * Get user profile data with enhanced retry logic
+   * Get user profile data with retry logic
    */
   async getUserProfile(username) {
-    return this.reliabilityService.withRetry(
-      async () => {
+    const maxRetries = 3;
+    const baseTimeout = 15000;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const timeout = baseTimeout * attempt;
+        console.log(`🔄 Profile API attempt ${attempt}/${maxRetries} (timeout: ${timeout}ms)`);
+        
         const response = await axios.get(
           `${this.baseURL}/${username}`,
-          { timeout: 15000 }
+          { timeout }
         );
         
+        console.log(`✅ Profile API successful on attempt ${attempt}`);
         return response.data;
-      },
-      { 
-        strategy: 'normal',
-        name: `getUserProfile(${username})`
+        
+      } catch (error) {
+        console.log(`⚠️ Profile API attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt === maxRetries) {
+          console.error('❌ Profile API failed - continuing with limited functionality');
+          throw error;
+        }
+        
+        const waitTime = 2000 * attempt;
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-    );
+    }
   }
 
   /**
-   * Get all submissions with pagination - NOW WITH RETRY LOGIC!
-   * This was one of the broken methods from the refactor
+   * Get all submissions with pagination
    */
   async getAllSubmissions(username, startDate) {
     console.log(`\n🔄 Fetching ALL submissions since ${startDate}...`);
     let allSubmissions = [];
     let offset = 0;
-    const limit = 100;
+    const limit = 100; // Maximum allowed by API
     let hasMore = true;
 
     while (hasMore) {
       try {
         console.log(`\n📑 Fetching page ${offset/limit + 1} (offset: ${offset}, limit: ${limit})`);
-        
-        // Use ReliabilityService for paginated requests
-        const response = await this.reliabilityService.withRetry(
-          async () => {
-            return axios.get(
-              `${this.baseURL}/${username}/acSubmission?offset=${offset}&limit=${limit}`,
-              { timeout: 15000 }
-            );
-          },
-          {
-            strategy: 'normal',
-            name: `getAllSubmissions page ${offset/limit + 1}`
-          }
+        const response = await axios.get(
+          `${this.baseURL}/${username}/acSubmission?offset=${offset}&limit=${limit}`,
+          { timeout: this.timeout }
         );
 
         const submissions = response.data.submission || [];
         console.log(`✅ Retrieved ${submissions.length} submissions`);
 
         if (submissions.length > 0) {
+          // Log first and last submission timestamps in this batch
           const first = new Date(parseInt(submissions[0].timestamp) * 1000);
           const last = new Date(parseInt(submissions[submissions.length - 1].timestamp) * 1000);
           console.log(`   Range: ${first.toISOString()} -> ${last.toISOString()}`);
 
+          // Check if we've gone past our start date
           const oldestTimestamp = parseInt(submissions[submissions.length - 1].timestamp) * 1000;
           const startTimestamp = new Date(startDate).getTime();
           if (oldestTimestamp < startTimestamp) {
@@ -288,16 +287,18 @@ class LeetCodeAPI {
 
         allSubmissions = allSubmissions.concat(submissions);
         
+        // If we got fewer results than limit, we've reached the end
         if (submissions.length < limit) {
           console.log(`📌 Reached end of submissions (got ${submissions.length} < ${limit})`);
           hasMore = false;
         } else {
           offset += limit;
+          // Add a small delay between requests
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } catch (error) {
         console.error(`❌ Error fetching submissions page:`, error.message);
-        hasMore = false;
+        hasMore = false; // Stop on error
       }
     }
 
@@ -309,121 +310,89 @@ class LeetCodeAPI {
   }
 
   /**
-   * Get submissions for a specific date - NOW WITH RETRY LOGIC!
-   * This was another broken method from the refactor
+   * Get submissions for a specific date
    */
   async getSubmissionsForDate(username, targetDate) {
-    return this.reliabilityService.withRetry(
-      async () => {
-        console.log(`\n🔍 Fetching submissions for ${targetDate}...`);
-        const response = await axios.get(
-          `${this.baseURL}/${username}/acSubmission?date=${targetDate}&limit=100`,
-          { timeout: 15000 }
-        );
+    try {
+      // Try to get submissions with date parameter
+      console.log(`\n🔍 Fetching submissions for ${targetDate}...`);
+      const response = await axios.get(
+        `${this.baseURL}/${username}/acSubmission?date=${targetDate}&limit=100`,
+        { timeout: this.timeout }
+      );
 
-        if (!response.data.submission || !Array.isArray(response.data.submission)) {
-          throw new Error('Invalid API response structure');
-        }
-
-        console.log(`\n📊 Found ${response.data.submission.length} submissions for ${targetDate}`);
-        return response.data.submission;
-      },
-      {
-        strategy: 'normal',
-        name: `getSubmissionsForDate(${targetDate})`
+      if (!response.data.submission || !Array.isArray(response.data.submission)) {
+        console.log('⚠️ Invalid API response structure');
+        return [];
       }
-    );
+
+      console.log(`\n📊 Found ${response.data.submission.length} submissions:`);
+      response.data.submission.forEach(s => {
+        const timestamp = new Date(parseInt(s.timestamp) * 1000);
+        console.log(`\n${s.titleSlug}:`);
+        console.log(`  Status: ${s.statusDisplay}`);
+        console.log(`  UTC: ${timestamp.toISOString()}`);
+        console.log(`  Local: ${timestamp.toLocaleString()}`);
+      });
+
+      // Filter accepted submissions
+      const acceptedSubmissions = response.data.submission.filter(s => 
+        (s.statusDisplay || '').toLowerCase() === 'accepted'
+      );
+
+      if (acceptedSubmissions.length > 0) {
+        console.log(`\n✅ Found ${acceptedSubmissions.length} accepted submissions:`);
+        acceptedSubmissions.forEach(s => {
+          const timestamp = new Date(parseInt(s.timestamp) * 1000);
+          console.log(`\n${s.titleSlug}:`);
+          console.log(`  Status: ${s.statusDisplay}`);
+          console.log(`  UTC: ${timestamp.toISOString()}`);
+          console.log(`  Local: ${timestamp.toLocaleString()}`);
+        });
+      } else {
+        console.log('\n❌ No accepted submissions found');
+      }
+
+      return acceptedSubmissions;
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      return [];
+    }
   }
 
   /**
-   * Enhanced wake up API with cold start strategy
+   * Wake up the API (useful for cold starts on Render/Heroku)
    */
   async wakeUpAPI() {
-    console.log('🌅 Starting enhanced API wake-up process...');
-    
+    console.log('🌅 Waking up external API...');
     try {
-      await this.reliabilityService.withRetry(
-        async () => {
-          const response = await axios.get(`${this.baseURL}/daily`);
-          return response.data;
-        },
-        {
-          strategy: 'coldStart', // Use cold start strategy!
-          name: 'wakeUpAPI'
-        }
-      );
-      
-      console.log('✅ API wake-up successful with ReliabilityService!');
+      const response = await axios.get(`${this.baseURL}/daily`, { 
+        timeout: 30000 // Give it plenty of time for cold start
+      });
+      console.log('✅ API is awake and responsive');
       return true;
-      
     } catch (error) {
-      console.log('❌ Enhanced API wake-up failed after all attempts');
-      console.log(`💡 Error: ${error.message}`);
-      
-      if (error.circuitBreaker) {
-        console.log('🔌 Circuit breaker is active - will prevent further attempts');
-      }
-      
+      console.log(`⚠️ API wake-up failed: ${error.message}`);
+      console.log('💡 This might slow down subsequent API calls');
       return false;
     }
   }
 
   /**
-   * Enhanced API health check
+   * Check API health
    */
   async checkAPIHealth() {
     try {
-      // Check if our circuit breaker is tripped
-      if (this.reliabilityService.isCircuitOpen()) {
-        console.log('🔌 ReliabilityService circuit breaker is active');
-        return { healthy: false, error: 'Circuit breaker active', circuitBreaker: true };
-      }
-
-      const result = await this.reliabilityService.withRetry(
-        async () => {
-          const start = Date.now();
-          const response = await axios.get(`${this.baseURL}/daily`);
-          const duration = Date.now() - start;
-          return { response: response.data, duration };
-        },
-        {
-          strategy: 'fast', // Use fast strategy for health checks
-          name: 'checkAPIHealth'
-        }
-      );
+      const start = Date.now();
+      const response = await axios.get(`${this.baseURL}/daily`, { timeout: 5000 });
+      const duration = Date.now() - start;
       
-      console.log(`✅ Enhanced API Health: OK (${result.duration}ms response time)`);
-      return { healthy: true, responseTime: result.duration };
-      
+      console.log(`✅ API Health: OK (${duration}ms response time)`);
+      return { healthy: true, responseTime: duration };
     } catch (error) {
-      console.log(`❌ Enhanced API Health: POOR (${error.message})`);
-      return { healthy: false, error: error.message, circuitBreaker: error.circuitBreaker };
+      console.log(`❌ API Health: POOR (${error.message})`);
+      return { healthy: false, error: error.message };
     }
-  }
-
-  // ...existing legacy methods for backward compatibility...
-  isCircuitBreakerTripped() {
-    // Delegate to ReliabilityService
-    return this.reliabilityService.isCircuitOpen();
-  }
-
-  incrementCircuitBreakerCount() {
-    // This is now handled by ReliabilityService automatically
-    console.log('⚠️ Legacy circuit breaker method called - handled by ReliabilityService');
-  }
-
-  /**
-   * Get reliability metrics for monitoring
-   */
-  getReliabilityMetrics() {
-    return this.reliabilityService.getMetrics();
-  }
-
-  /**
-   * Reset reliability service (for testing)
-   */
-  resetReliability() {
-    this.reliabilityService.resetCircuitBreaker();
   }
 }
 
@@ -659,24 +628,38 @@ class ProgressTracker {
     console.log('\n🕑 Daily routine - Multi-problem support');
     
     try {
-      // Step 1: Check API health with longer initial attempt
+      // Step 1: Check API health and wake it up if needed
       console.log('🏥 Checking LeetCode API health...');
       let apiHealth = await this.leetcodeApi.checkAPIHealth();
       
       if (!apiHealth.healthy) {
-        if (apiHealth.circuitBreaker) {
-          console.log('🔌 Circuit breaker is active - will retry on next scheduled run');
-          return;
-        }
-
-        console.log('⚡ API appears to be sleeping, starting wake-up process...');
-        const wakeupSuccess = await this.leetcodeApi.wakeUpAPI();
+        console.log('⚡ API appears to be sleeping, attempting wake-up...');
+        await this.leetcodeApi.wakeUpAPI();
         
-        if (!wakeupSuccess) {
-          console.log('❌ API failed to wake up after extended attempts');
-          console.log('💡 Will retry on next scheduled run');
-          return;
+        // Wait a bit and verify API is actually responding
+        console.log('⏳ Waiting for API to fully wake up...');
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 5000 * attempt)); // 5s, 10s, 15s waits
+          apiHealth = await this.leetcodeApi.checkAPIHealth();
+          
+          if (apiHealth.healthy) {
+            console.log('✅ API is now awake and responding!');
+            break;
+          }
+          
+          if (attempt === 3) {
+            console.log('❌ API failed to wake up after multiple attempts');
+            console.log('💡 Will try again on next scheduled run');
+            return;
+          }
+          
+          console.log(`⏳ API still waking up, attempt ${attempt}/3...`);
         }
+      }
+
+      // Only proceed if API is healthy
+      if (!apiHealth.healthy) {
+        return;
       }
 
       // Step 2: Load progress and settings
@@ -772,187 +755,12 @@ class ProgressTracker {
   }
 
   /**
-   * Enhanced daily routine with rollback support and atomic transactions
-   */
-  async runDailyRoutineWithRollback() {
-    console.log('\n🕑 Daily routine with rollback support - Multi-problem support');
-    
-    // Import the enhanced database service functions
-    const { createCheckpoint, rollbackToCheckpoint, atomicProgressUpdate } = require('./lib/firebase');
-    
-    let checkpoint;
-    
-    try {
-      // Step 1: Create checkpoint before any changes
-      console.log('📋 Creating checkpoint before starting routine...');
-      checkpoint = await createCheckpoint();
-      
-      // Step 2: Check API health with longer initial attempt
-      console.log('🏥 Checking LeetCode API health...');
-      let apiHealth = await this.leetcodeApi.checkAPIHealth();
-      
-      if (!apiHealth.healthy) {
-        if (apiHealth.circuitBreaker) {
-          console.log('🔌 Circuit breaker is active - will retry on next scheduled run');
-          return;
-        }
-
-        console.log('⚡ API appears to be sleeping, starting wake-up process...');
-        const wakeupSuccess = await this.leetcodeApi.wakeUpAPI();
-        
-        if (!wakeupSuccess) {
-          console.log('❌ API failed to wake up after extended attempts');
-          console.log('💡 Will retry on next scheduled run');
-          return;
-        }
-      }
-
-      // Step 3: Load progress and settings (using atomic operations)
-      const [progress, settings] = await Promise.all([
-        databaseService.loadProgress(),
-        databaseService.loadSettings()
-      ]);
-      
-      const now = new Date();
-      const todayStr = format(now, 'yyyy-MM-dd');
-      
-      console.log(`📊 Current settings: ${settings.num_questions} problems per day`);
-      console.log(`📅 Last sent: ${progress.lastSentDate}, Today: ${todayStr}`);
-
-      // Check if we already sent problems today
-      if (progress.lastSentDate === todayStr) {
-        console.log('⏭️ Problems already sent today. Skipping daily routine.');
-        console.log(`📝 Today's problems: [${progress.sentProblems.map(p => p.slug).join(', ')}]`);
-        return;
-      }
-
-      // Step 4: Atomically update solved status
-      console.log('🔍 Checking for solved problems with atomic update...');
-      const progressWithUpdatedSolved = await atomicProgressUpdate('default', async (currentProgress) => {
-        await this.updateSolvedStatusInProgress(currentProgress, STUDY_PLAN.username);
-        return currentProgress;
-      });
-
-      // Step 5: Calculate what problems to send today
-      const todaysCalculation = calculateTodaysProblems(progressWithUpdatedSolved, settings);
-      
-      if (todaysCalculation.problems.length === 0) {
-        console.log('🎉 Study plan completed! No more problems to send.');
-        return;
-      }
-
-      console.log(`📝 Sending ${todaysCalculation.problems.length} problems:`);
-      console.log(`  - Unfinished: ${todaysCalculation.unfinished.length}`);
-      console.log(`  - New: ${todaysCalculation.newProblems.length}`);
-
-      // Step 6: Get problem details for email
-      const problemDetails = this.getProblemDetails(todaysCalculation.problems);
-      const unfinishedDetails = problemDetails.filter(p => todaysCalculation.unfinished.includes(p.slug));
-      const newProblemDetails = problemDetails.filter(p => todaysCalculation.newProblems.includes(p.slug));
-
-      // Step 7: Send appropriate email (this is the critical operation that might fail)
-      console.log('📧 Sending email notification...');
-      if (problemDetails.length === 1) {
-        // Single problem - use original email format
-        const problem = problemDetails[0];
-        const topicName = StudyPlanHelper.getTopicBySlug(problem.slug);
-        if (todaysCalculation.unfinished.includes(problem.slug)) {
-          await this.emailService.sendReminderEmail(problem, topicName);
-        } else {
-          await this.emailService.sendTodaysQuestionEmail(problem, topicName);
-        }
-      } else {
-        // Multiple problems - use new email format
-        await this.emailService.sendMultipleProblemsEmail(problemDetails, {
-          unfinished: unfinishedDetails,
-          newProblems: newProblemDetails,
-          totalCount: problemDetails.length
-        });
-      }
-      
-      console.log('✅ Email sent successfully');
-
-      // Step 8: Atomically update progress - only after email success
-      console.log('💾 Updating progress with atomic transaction...');
-      await atomicProgressUpdate('default', (currentProgress) => {
-        // Preserve unsolved problems
-        const unsolvedProblems = currentProgress.sentProblems.filter(p => !p.solved);
-        const newSentProblems = todaysCalculation.problems.map(slug => {
-          // Check if this problem was previously unsolved
-          const existingProblem = unsolvedProblems.find(p => p.slug === slug);
-          if (existingProblem) {
-            return existingProblem; // Keep the existing record
-          }
-          // Create new record for new problems
-          return {
-            slug: slug,
-            solved: false,
-            sentDate: todayStr
-          };
-        });
-
-        return {
-          ...currentProgress,
-          lastSentDate: todayStr,
-          sentProblems: newSentProblems,
-          studyPlanPosition: todaysCalculation.updatedPosition,
-          pendingQueue: todaysCalculation.updatedPendingQueue,
-          settingsAtSendTime: {
-            num_questions: settings.num_questions,
-            timestamp: new Date().toISOString()
-          }
-        };
-      });
-
-      console.log('✅ Daily routine completed successfully with rollback protection');
-      
-    } catch (error) {
-      console.error('❌ Daily routine failed, initiating rollback...', error.message);
-      
-      // Rollback to checkpoint on any failure
-      if (checkpoint) {
-        try {
-          await rollbackToCheckpoint(checkpoint);
-          console.log('🔄 Successfully rolled back to checkpoint');
-        } catch (rollbackError) {
-          console.error('💥 CRITICAL: Rollback failed!', rollbackError.message);
-          // This is a critical failure - the system is in an inconsistent state
-          throw new Error(`Daily routine failed and rollback failed: ${rollbackError.message}`);
-        }
-      }
-      
-      // Re-throw the original error
-      throw error;
-    }
-  }
-
-  /**
    * Update solved status for sent problems
    */
   async updateSolvedStatus(progress, username) {
     try {
       console.log(`🔍 Checking recent submissions for ${username}...`);
-      
-      // Use the existing getUserSubmissions method but override its strategy to be more aggressive
-      const submissions = await this.leetcodeApi.reliabilityService.withRetry(
-        async () => {
-          // Call the API directly to avoid double-wrapping
-          const response = await axios.get(
-            `${this.leetcodeApi.baseURL}/${username}/acSubmission?limit=20`,
-            { timeout: 15000 }
-          );
-          
-          if (!response.data || typeof response.data !== 'object') {
-            throw new Error('Invalid API response structure');
-          }
-          
-          return response.data;
-        },
-        { 
-          strategy: 'aggressive', // Use aggressive strategy for this critical operation
-          name: `updateSolvedStatus-getUserSubmissions(${username})`
-        }
-      );
+      const submissions = await this.leetcodeApi.getUserSubmissions(username, 20); // 20 is enough for recent submissions
       
       if (!submissions.submission || !Array.isArray(submissions.submission)) {
         console.log('⚠️ Invalid API response structure');
@@ -1008,99 +816,11 @@ class ProgressTracker {
       }
 
     } catch (error) {
-      console.error('❌ Error checking submissions after all retry attempts:', error.message);
-      if (error.circuitBreaker) {
-        console.log('🔌 Circuit breaker is active - will retry on next scheduled run');
-      }
-      // Re-throw the error so the caller knows the operation failed
-      throw error;
-    }
-  }
-
-  /**
-   * Update solved status for sent problems (internal method for atomic operations)
-   * This modifies the progress object in-place
-   */
-  async updateSolvedStatusInProgress(progress, username) {
-    try {
-      console.log(`🔍 Checking recent submissions for ${username}...`);
-      const submissions = await this.leetcodeApi.getUserSubmissions(username, 20);
-      
-      if (!submissions.submission || !Array.isArray(submissions.submission)) {
-        console.log('⚠️ Invalid API response structure');
-        return;
-      }
-
-      // Validate API response with our new framework
-      const validationResult = DataValidator.validateSafe(
-        { response: submissions, endpoint: 'getUserSubmissions' },
-        'submission-response',
-        'updateSolvedStatusInProgress'
-      );
-
-      if (!validationResult.success) {
-        console.warn(`⚠️ API response validation failed: ${validationResult.error.message}`);
-        // Continue with degraded functionality rather than failing completely
-      }
-
-      // Use DateUtils for robust timestamp parsing
-      const acceptedSubmissions = submissions.submission
-        .filter(s => (s.statusDisplay || '').toLowerCase() === 'accepted')
-        .map(s => {
-          try {
-            const timestamp = DateUtils.parseApiTimestamp(s.timestamp, `submission-${s.titleSlug}`);
-            return {
-              slug: s.titleSlug,
-              timestamp: timestamp
-            };
-          } catch (error) {
-            console.warn(`⚠️ Invalid timestamp for ${s.titleSlug}: ${error.message}`);
-            return null;
-          }
-        })
-        .filter(Boolean); // Remove null entries
-
-      console.log(`📝 Found ${acceptedSubmissions.length} valid recent accepted submissions`);
-
-      // Update solved status for each unsolved sent problem
-      let solvedCount = 0;
-      progress.sentProblems.forEach(sentProblem => {
-        if (sentProblem.solved) {
-          return; // Already solved, skip
-        }
-
-        try {
-          // Look for an accepted submission after assignment using DateUtils
-          const matchingSubmission = acceptedSubmissions.find(sub => {
-            if (sub.slug !== sentProblem.slug) return false;
-            
-            return DateUtils.isSubmissionAfterAssignment(
-              sub.timestamp,
-              sentProblem.sentDate,
-              `progress-check-${sentProblem.slug}`
-            );
-          });
-
-          if (matchingSubmission) {
-            sentProblem.solved = true;
-            sentProblem.solvedTimestamp = matchingSubmission.timestamp.toISOString();
-            solvedCount++;
-            console.log(`✅ ${sentProblem.slug} solved at ${matchingSubmission.timestamp.toLocaleString()}`);
-          }
-        } catch (error) {
-          console.warn(`⚠️ Error processing ${sentProblem.slug}:`, error.message);
-        }
-      });
-
-      if (solvedCount > 0) {
-        console.log(`🎉 Updated ${solvedCount} problems as solved!`);
-      } else {
-        console.log('📝 No new problems marked as solved');
-      }
-
-    } catch (error) {
       console.error('❌ Error checking submissions:', error.message);
-      // Don't throw here - we want to continue with the routine even if submission checking fails
+      if (error.response) {
+        console.error('API Response Status:', error.response.status);
+        console.error('API Response Data:', error.response.data);
+      }
     }
   }
 
